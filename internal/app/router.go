@@ -1,0 +1,43 @@
+package app
+
+import (
+	"net/http"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+
+	"go_weighing_service/internal/handler"
+	"go_weighing_service/internal/middleware"
+)
+
+type Handlers struct {
+	Dictionary *handler.DictionaryHandler
+}
+
+func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *chi.Mux {
+	router := chi.NewRouter()
+
+	router.Use(chiMiddleware.RequestID)
+	router.Use(middleware.RequestLogger())
+	router.Use(chiMiddleware.Recoverer)
+	router.Use(chiMiddleware.Timeout(15 * time.Second))
+	router.Use(middleware.CORS(corsOrigins))
+
+	router.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write([]byte(`{"status":"ok","service":"weighing"}`))
+	})
+
+	router.Route("/spa/api/weighing", func(r chi.Router) {
+		r.Use(auth.Handler)
+
+		r.Get("/dictionaries/{code}", handlers.Dictionary.List)
+		r.Post("/dictionaries/{code}", handlers.Dictionary.Create)
+		r.Patch("/dictionaries/{code}/{id}", handlers.Dictionary.Update)
+		r.Delete("/dictionaries/{code}/{id}", handlers.Dictionary.Delete)
+		r.Post("/dictionaries/{code}/{id}/restore", handlers.Dictionary.Restore)
+	})
+
+	return router
+}

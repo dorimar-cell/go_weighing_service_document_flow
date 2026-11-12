@@ -1,0 +1,46 @@
+services:
+  weighing_db:
+    image: postgres:16.4
+    container_name: weighing_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-weighing}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-weighing}
+      POSTGRES_DB: ${DB_NAME:-weighing_db}
+      PGDATA: /data/postgres
+    volumes:
+      - ./../postgres_data_weighing:/data/postgres
+    ports:
+      # На хосте 5436, чтобы не пересекаться с Symfony (5432), kanban (5433), warehouse (5434).
+      - "${DB_PORT:-5436}:5432"
+    networks:
+      - weighing-net
+
+  weighing_service:
+    build:
+      context: .
+      dockerfile: ./docker_env/go/Dockerfile
+    container_name: weighing_service
+    restart: unless-stopped
+    depends_on:
+      - weighing_db
+    env_file:
+      - .env
+    volumes:
+      - ./:/app
+      - ./../symfony_documents_flow/config/jwt/public.pem:/config/jwt/public.pem:ro
+    environment:
+      WEIGHING_DB_URL: "postgresql://${DB_USER:-weighing}:${DB_PASSWORD:-weighing}@weighing_db:5432/${DB_NAME:-weighing_db}?sslmode=disable"
+      JWT_PUBLIC_KEY_PATH: /config/jwt/public.pem
+    # Порт наружу не публикуем: доступ через nginx по project-net.
+    networks:
+      - weighing-net
+      - project-net
+
+networks:
+  weighing-net:
+    name: weighing-net
+    driver: bridge
+
+  project-net:
+    external: true
