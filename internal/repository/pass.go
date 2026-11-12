@@ -52,7 +52,11 @@ func NewPassRepository(pool *pgxpool.Pool) *PassRepository {
 	return &PassRepository{pool: pool}
 }
 
-func (r *PassRepository) Create(ctx context.Context, request dto.CreatePassRequest) (*dto.PassDTO, error) {
+func (r *PassRepository) Create(
+	ctx context.Context,
+	request dto.CreatePassRequest,
+	userID int64,
+) (*dto.PassDTO, error) {
 	passTypeID := request.PassTypeID
 	if passTypeID == 0 {
 		passTypeID = 1
@@ -95,7 +99,7 @@ func (r *PassRepository) Create(ctx context.Context, request dto.CreatePassReque
 			 id_system_dir_type_of_pass, id_dir_transport, id_dir_trailer, id_dir_driver,
 			 id_dir_cargo, id_dir_counterparty, id_dir_carrier,
 			 date_pass_expiry, deleted, created_by_user_id, created_date)
-		VALUES ($1, true, false, 1, 1, $2, $3, $4, $5, $6, $7, $8, $9, false, 1, now())
+		VALUES ($1, true, false, 1, 1, $2, $3, $4, $5, $6, $7, $8, $9, false, $10, now())
 		RETURNING id`,
 		request.Number,
 		passTypeID,
@@ -106,6 +110,7 @@ func (r *PassRepository) Create(ctx context.Context, request dto.CreatePassReque
 		request.CounterpartyID,
 		request.CarrierID,
 		request.ValidUntil,
+		userID,
 	).Scan(&passID); err != nil {
 		return nil, fmt.Errorf("insert pass: %w", err)
 	}

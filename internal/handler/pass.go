@@ -22,13 +22,17 @@ func NewPassHandler(svc *service.PassService) *PassHandler {
 
 // Create: POST /spa/api/weighing/passes
 func (h *PassHandler) Create(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permPasses) {
+		return
+	}
+
 	var request dto.CreatePassRequest
 	if err := decodeJSON(w, r, &request); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
 		return
 	}
 
-	pass, err := h.service.Create(r.Context(), request)
+	pass, err := h.service.Create(r.Context(), request, currentUserID(r))
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -39,6 +43,10 @@ func (h *PassHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // List: GET /spa/api/weighing/passes?status=active&search=&page=1&pageSize=25
 func (h *PassHandler) List(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permPasses) {
+		return
+	}
+
 	status := r.URL.Query().Get("status")
 	search := r.URL.Query().Get("search")
 	page := parseQueryInt(r, "page", 1)
@@ -55,6 +63,10 @@ func (h *PassHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Get: GET /spa/api/weighing/passes/{id}
 func (h *PassHandler) Get(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permPasses) {
+		return
+	}
+
 	id, err := parseID(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_id", "Некорректный идентификатор пропуска")

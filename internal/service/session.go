@@ -25,7 +25,11 @@ func NewSessionService(
 	return &SessionService{repo: repo, passes: passes, verifier: verifier}
 }
 
-func (s *SessionService) Create(ctx context.Context, request dto.CreateSessionRequest) (*dto.SessionDTO, error) {
+func (s *SessionService) Create(
+	ctx context.Context,
+	request dto.CreateSessionRequest,
+	userID int64,
+) (*dto.SessionDTO, error) {
 	request.TransportNumber = strings.TrimSpace(request.TransportNumber)
 	request.TrailerNumber = strings.TrimSpace(request.TrailerNumber)
 	request.DriverName = strings.TrimSpace(request.DriverName)
@@ -69,13 +73,14 @@ func (s *SessionService) Create(ctx context.Context, request dto.CreateSessionRe
 		return nil, err
 	}
 
-	return s.repo.Create(ctx, request)
+	return s.repo.Create(ctx, request, userID)
 }
 
 // CreateFlow — поточный режим: рейс сразу закрывается введённой тарой.
 func (s *SessionService) CreateFlow(
 	ctx context.Context,
 	request dto.FlowSessionRequest,
+	userID int64,
 ) (*dto.SessionDTO, error) {
 	if request.TareKg <= 0 {
 		return nil, &ValidationError{Message: "Укажите тару больше нуля"}
@@ -84,18 +89,19 @@ func (s *SessionService) CreateFlow(
 		return nil, &ValidationError{Message: "Тара должна быть меньше брутто"}
 	}
 
-	session, err := s.Create(ctx, request.CreateSessionRequest)
+	session, err := s.Create(ctx, request.CreateSessionRequest, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.repo.CloseWithManualTare(ctx, session.ID, request.TareKg, time.Now())
+	return s.repo.CloseWithManualTare(ctx, session.ID, request.TareKg, time.Now(), userID)
 }
 
 func (s *SessionService) Close(
 	ctx context.Context,
 	id int64,
 	measurement dto.MeasurementDTO,
+	userID int64,
 ) (*dto.SessionDTO, error) {
 	if id <= 0 {
 		return nil, &ValidationError{Message: "Некорректный идентификатор рейса"}
@@ -104,7 +110,7 @@ func (s *SessionService) Close(
 		return nil, err
 	}
 
-	return s.repo.Close(ctx, id, measurement)
+	return s.repo.Close(ctx, id, measurement, userID)
 }
 
 func (s *SessionService) List(
@@ -137,11 +143,11 @@ func (s *SessionService) Get(ctx context.Context, id int64) (*dto.SessionDTO, er
 	return s.repo.Get(ctx, id)
 }
 
-func (s *SessionService) Cancel(ctx context.Context, id int64) error {
+func (s *SessionService) Cancel(ctx context.Context, id int64, userID int64) error {
 	if id <= 0 {
 		return &ValidationError{Message: "Некорректный идентификатор рейса"}
 	}
-	return s.repo.Cancel(ctx, id)
+	return s.repo.Cancel(ctx, id, userID)
 }
 
 func (s *SessionService) Measurements(ctx context.Context, id int64) ([]dto.MeasurementRecord, error) {

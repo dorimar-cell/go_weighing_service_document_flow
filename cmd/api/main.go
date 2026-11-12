@@ -39,7 +39,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	auth, err := middleware.NewAuth(cfg.AuthMode, cfg.JWTPublicKeyPath)
+	auth, err := middleware.NewAuth(cfg.AuthMode, cfg.JWTPublicKeyPath, middleware.NewUserStore(pool))
 	if err != nil {
 		slog.Error("auth init failed", "error", err)
 		os.Exit(1)

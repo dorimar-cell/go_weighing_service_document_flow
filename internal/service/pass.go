@@ -16,7 +16,11 @@ func NewPassService(repo *repository.PassRepository) *PassService {
 	return &PassService{repo: repo}
 }
 
-func (s *PassService) Create(ctx context.Context, request dto.CreatePassRequest) (*dto.PassDTO, error) {
+func (s *PassService) Create(
+	ctx context.Context,
+	request dto.CreatePassRequest,
+	userID int64,
+) (*dto.PassDTO, error) {
 	request.Number = strings.TrimSpace(request.Number)
 	request.TransportNumber = strings.TrimSpace(request.TransportNumber)
 	request.TrailerNumber = strings.TrimSpace(request.TrailerNumber)
@@ -29,7 +33,7 @@ func (s *PassService) Create(ctx context.Context, request dto.CreatePassRequest)
 		return nil, &ValidationError{Message: "Укажите номер транспортного средства"}
 	}
 
-	return s.repo.Create(ctx, request)
+	return s.repo.Create(ctx, request, userID)
 }
 
 func (s *PassService) List(

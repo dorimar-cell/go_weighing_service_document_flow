@@ -28,13 +28,17 @@ func NewSessionHandler(svc *service.SessionService) *SessionHandler {
 
 // Create: POST /spa/api/weighing/sessions
 func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permFirstWeight) {
+		return
+	}
+
 	var request dto.CreateSessionRequest
 	if err := decodeJSON(w, r, &request); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
 		return
 	}
 
-	session, err := h.service.Create(r.Context(), request)
+	session, err := h.service.Create(r.Context(), request, currentUserID(r))
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -45,13 +49,17 @@ func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // Flow: POST /spa/api/weighing/sessions/flow
 func (h *SessionHandler) Flow(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permFlowWeight) {
+		return
+	}
+
 	var request dto.FlowSessionRequest
 	if err := decodeJSON(w, r, &request); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
 		return
 	}
 
-	session, err := h.service.CreateFlow(r.Context(), request)
+	session, err := h.service.CreateFlow(r.Context(), request, currentUserID(r))
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -62,6 +70,10 @@ func (h *SessionHandler) Flow(w http.ResponseWriter, r *http.Request) {
 
 // Close: POST /spa/api/weighing/sessions/{id}/second
 func (h *SessionHandler) Close(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permSecondWeight) {
+		return
+	}
+
 	id, err := parseID(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_id", "Некорректный идентификатор рейса")
@@ -74,7 +86,7 @@ func (h *SessionHandler) Close(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, err := h.service.Close(r.Context(), id, request.Measurement)
+	session, err := h.service.Close(r.Context(), id, request.Measurement, currentUserID(r))
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -85,6 +97,10 @@ func (h *SessionHandler) Close(w http.ResponseWriter, r *http.Request) {
 
 // List: GET /spa/api/weighing/sessions?status=open&page=1&pageSize=25
 func (h *SessionHandler) List(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permJournal) {
+		return
+	}
+
 	status := r.URL.Query().Get("status")
 	search := r.URL.Query().Get("search")
 	page := parseQueryInt(r, "page", 1)
@@ -112,6 +128,10 @@ func (h *SessionHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Get: GET /spa/api/weighing/sessions/{id}
 func (h *SessionHandler) Get(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permJournal) {
+		return
+	}
+
 	id, err := parseID(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_id", "Некорректный идентификатор рейса")
@@ -129,6 +149,10 @@ func (h *SessionHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 // Export: GET /spa/api/weighing/sessions/export?status=&search=&dateFrom=&dateTo=
 func (h *SessionHandler) Export(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permExport) {
+		return
+	}
+
 	status := r.URL.Query().Get("status")
 	search := r.URL.Query().Get("search")
 
@@ -223,6 +247,10 @@ func formatCSVTime(value *time.Time) string {
 
 // Measurements: GET /spa/api/weighing/sessions/{id}/measurements
 func (h *SessionHandler) Measurements(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permJournal) {
+		return
+	}
+
 	id, err := parseID(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_id", "Некорректный идентификатор рейса")
@@ -240,13 +268,17 @@ func (h *SessionHandler) Measurements(w http.ResponseWriter, r *http.Request) {
 
 // Cancel: POST /spa/api/weighing/sessions/{id}/cancel
 func (h *SessionHandler) Cancel(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permCancelWeight) {
+		return
+	}
+
 	id, err := parseID(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_id", "Некорректный идентификатор рейса")
 		return
 	}
 
-	if err := h.service.Cancel(r.Context(), id); err != nil {
+	if err := h.service.Cancel(r.Context(), id, currentUserID(r)); err != nil {
 		h.handleError(w, err)
 		return
 	}

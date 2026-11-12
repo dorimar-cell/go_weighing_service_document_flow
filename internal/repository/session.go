@@ -77,7 +77,11 @@ func NewSessionRepository(pool *pgxpool.Pool) *SessionRepository {
 }
 
 // Create создаёт первое взвешивание. operationId делает операцию идемпотентной.
-func (r *SessionRepository) Create(ctx context.Context, req dto.CreateSessionRequest) (*dto.SessionDTO, error) {
+func (r *SessionRepository) Create(
+	ctx context.Context,
+	req dto.CreateSessionRequest,
+	userID int64,
+) (*dto.SessionDTO, error) {
 	existing, err := r.findByOperation(ctx, req.Measurement.OperationID)
 	if err != nil {
 		return nil, err
@@ -119,14 +123,14 @@ func (r *SessionRepository) Create(ctx context.Context, req dto.CreateSessionReq
 	if err := tx.QueryRow(ctx, `
 		INSERT INTO com_dir_transport_driver_trailer
 			(id_dir_driver, id_dir_transport, id_dir_trailer, deleted, created_by_user_id, created_date)
-		VALUES ($1, $2, $3, false, 1, now())
+		VALUES ($1, $2, $3, false, $4, now())
 		RETURNING id`,
-		driverID, transportID, trailerID,
+		driverID, transportID, trailerID, userID,
 	).Scan(&linkID); err != nil {
 		return nil, fmt.Errorf("insert transport link: %w", err)
 	}
 
-	invoiceID, err := createInvoice(ctx, tx, req)
+	invoiceID, err := createInvoice(ctx, tx, req, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -134,9 +138,9 @@ func (r *SessionRepository) Create(ctx context.Context, req dto.CreateSessionReq
 	var infoID int64
 	if err := tx.QueryRow(ctx, `
 		INSERT INTO weighing_info (id_com_transport_driver_trailer, id_dir_invoice, deleted, created_by_user_id, created_date)
-		VALUES ($1, $2, false, 1, now())
+		VALUES ($1, $2, false, $3, now())
 		RETURNING id`,
-		linkID, invoiceID,
+		linkID, invoiceID, userID,
 	).Scan(&infoID); err != nil {
 		return nil, fmt.Errorf("insert weighing_info: %w", err)
 	}
@@ -147,9 +151,9 @@ func (r *SessionRepository) Create(ctx context.Context, req dto.CreateSessionReq
 			(id_weighting_info, first_weight, flag_weight, deleted, created_by_user_id, created_date,
 			 id_first_weight_user, date_time_first_weight, ref,
 			 first_weight_1c, is_flow_weight, has_edited, second_weight_1c, id_reg_weight)
-		VALUES ($1, $2, false, false, 1, now(), 1, $3, gen_random_uuid(), false, false, false, false, $4)
+		VALUES ($1, $2, false, false, $5, now(), $5, $3, gen_random_uuid(), false, false, false, false, $4)
 		RETURNING id`,
-		infoID, req.Measurement.WeightKg, req.Measurement.MeasuredAt, req.PassID,
+		infoID, req.Measurement.WeightKg, req.Measurement.MeasuredAt, req.PassID, userID,
 	).Scan(&weighingID); err != nil {
 		return nil, fmt.Errorf("insert weighing: %w", err)
 	}
@@ -166,7 +170,12 @@ func (r *SessionRepository) Create(ctx context.Context, req dto.CreateSessionReq
 }
 
 // Close закрывает вторым взвешиванием.
-func (r *SessionRepository) Close(ctx context.Context, id int64, measurement dto.MeasurementDTO) (*dto.SessionDTO, error) {
+func (r *SessionRepository) Close(
+	ctx context.Context,
+	id int64,
+	measurement dto.MeasurementDTO,
+	userID int64,
+) (*dto.SessionDTO, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin close session: %w", err)
@@ -211,11 +220,11 @@ func (r *SessionRepository) Close(ctx context.Context, id int64, measurement dto
 		SET second_weight = $2,
 		    date_time_second_weight = $3,
 		    flag_weight = true,
-		    id_second_weight_user = 1,
-		    modified_by_user_id = 1,
+		    id_second_weight_user = $4,
+		    modified_by_user_id = $4,
 		    modified_date = now()
 		WHERE id = $1`,
-		id, measurement.WeightKg, measurement.MeasuredAt,
+		id, measurement.WeightKg, measurement.MeasuredAt, userID,
 	); err != nil {
 		return nil, fmt.Errorf("update weighing: %w", err)
 	}
@@ -246,6 +255,7 @@ func (r *SessionRepository) CloseWithManualTare(
 	id int64,
 	tareKg float64,
 	measuredAt time.Time,
+	userID int64,
 ) (*dto.SessionDTO, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -277,11 +287,11 @@ func (r *SessionRepository) CloseWithManualTare(
 		    handle_second_weight = $2,
 		    date_time_second_weight = $3,
 		    flag_weight = true,
-		    id_second_weight_user = 1,
-		    modified_by_user_id = 1,
+		    id_second_weight_user = $4,
+		    modified_by_user_id = $4,
 		    modified_date = now()
 		WHERE id = $1`,
-		id, tareKg, measuredAt,
+		id, tareKg, measuredAt, userID,
 	); err != nil {
 		return nil, fmt.Errorf("update flow weighing: %w", err)
 	}
@@ -435,7 +445,7 @@ func (r *SessionRepository) Get(ctx context.Context, id int64) (*dto.SessionDTO,
 	return item, nil
 }
 
-func (r *SessionRepository) Cancel(ctx context.Context, id int64) error {
+func (r *SessionRepository) Cancel(ctx context.Context, id int64, userID int64) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin cancel session: %w", err)
@@ -445,9 +455,9 @@ func (r *SessionRepository) Cancel(ctx context.Context, id int64) error {
 	var infoID int64
 	err = tx.QueryRow(ctx, `
 		UPDATE weighing
-		SET deleted = true, modified_by_user_id = 1, modified_date = now()
+		SET deleted = true, modified_by_user_id = $2, modified_date = now()
 		WHERE id = $1 AND flag_weight = false AND deleted = false
-		RETURNING id_weighting_info`, id,
+		RETURNING id_weighting_info`, id, userID,
 	).Scan(&infoID)
 
 	if err != nil {
@@ -542,7 +552,12 @@ func insertMeasurement(
 
 // createInvoice сохраняет груз/контрагента/перевозчика/склад/тип операции.
 // Если ничего не выбрано, накладная не создаётся.
-func createInvoice(ctx context.Context, tx pgx.Tx, req dto.CreateSessionRequest) (*int64, error) {
+func createInvoice(
+	ctx context.Context,
+	tx pgx.Tx,
+	req dto.CreateSessionRequest,
+	userID int64,
+) (*int64, error) {
 	if req.CargoID == nil && req.StorageID == nil && req.CounterpartyID == nil &&
 		req.CarrierID == nil && req.OperationTypeID == nil {
 		return nil, nil
@@ -552,9 +567,9 @@ func createInvoice(ctx context.Context, tx pgx.Tx, req dto.CreateSessionRequest)
 	if err := tx.QueryRow(ctx, `
 		INSERT INTO dir_invoice
 			(name, id_dir_carrier, id_dir_counterparty, id_dir_type_of_operation, date, time, deleted, created_by_user_id, created_date)
-		VALUES ('', $1, $2, $3, current_date, current_time, false, 1, now())
+		VALUES ('', $1, $2, $3, current_date, current_time, false, $4, now())
 		RETURNING id`,
-		req.CarrierID, req.CounterpartyID, req.OperationTypeID,
+		req.CarrierID, req.CounterpartyID, req.OperationTypeID, userID,
 	).Scan(&invoiceID); err != nil {
 		return nil, fmt.Errorf("insert invoice: %w", err)
 	}
@@ -563,8 +578,8 @@ func createInvoice(ctx context.Context, tx pgx.Tx, req dto.CreateSessionRequest)
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO com_dir_invoice_dir_storage
 				(id_dir_cargo, id_dir_invoice, id_dir_storage, deleted, created_by_user_id, created_date)
-			VALUES ($1, $2, $3, false, 1, now())`,
-			req.CargoID, invoiceID, req.StorageID,
+			VALUES ($1, $2, $3, false, $4, now())`,
+			req.CargoID, invoiceID, req.StorageID, userID,
 		); err != nil {
 			return nil, fmt.Errorf("insert invoice line: %w", err)
 		}
