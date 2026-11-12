@@ -391,6 +391,38 @@ func (r *SessionRepository) Measurements(
 	return items, nil
 }
 
+// Export возвращает все рейсы по фильтру без пагинации (для CSV).
+func (r *SessionRepository) Export(
+	ctx context.Context,
+	status string,
+	search string,
+	dateFrom *time.Time,
+	dateTo *time.Time,
+) ([]dto.SessionDTO, error) {
+	where, args := buildSessionWhere(status, search, dateFrom, dateTo)
+	query := sessionSelect + " " + where + " ORDER BY w.created_date DESC LIMIT 10000"
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("export sessions: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]dto.SessionDTO, 0, 256)
+	for rows.Next() {
+		item, err := scanSession(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, *item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate export sessions: %w", err)
+	}
+
+	return items, nil
+}
+
 func (r *SessionRepository) Get(ctx context.Context, id int64) (*dto.SessionDTO, error) {
 	row := r.pool.QueryRow(ctx, sessionSelect+" WHERE w.id = $1", id)
 	item, err := scanSession(row)

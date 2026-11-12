@@ -150,3 +150,18 @@ func (s *SessionService) Measurements(ctx context.Context, id int64) ([]dto.Meas
 	}
 	return s.repo.Measurements(ctx, id)
 }
+
+func (s *SessionService) Export(
+	ctx context.Context,
+	status string,
+	search string,
+	dateFrom *time.Time,
+	dateTo *time.Time,
+) ([]dto.SessionDTO, error) {
+	status = strings.ToLower(strings.TrimSpace(status))
+	if status == "" {
+		status = "all"
+	}
+
+	return s.repo.Export(ctx, status, strings.TrimSpace(search), dateFrom, dateTo)
+}

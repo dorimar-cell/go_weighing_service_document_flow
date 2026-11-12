@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -122,6 +125,100 @@ func (h *SessionHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, session)
+}
+
+// Export: GET /spa/api/weighing/sessions/export?status=&search=&dateFrom=&dateTo=
+func (h *SessionHandler) Export(w http.ResponseWriter, r *http.Request) {
+	status := r.URL.Query().Get("status")
+	search := r.URL.Query().Get("search")
+
+	dateFrom, err := parseDateParam(r.URL.Query().Get("dateFrom"), false)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_date", err.Error())
+		return
+	}
+	dateTo, err := parseDateParam(r.URL.Query().Get("dateTo"), true)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_date", err.Error())
+		return
+	}
+
+	items, err := h.service.Export(r.Context(), status, search, dateFrom, dateTo)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(
+		`attachment; filename="weighing-journal-%s.csv"`,
+		time.Now().Format("20060102-150405"),
+	))
+	_, _ = w.Write([]byte{0xEF, 0xBB, 0xBF})
+
+	writer := csv.NewWriter(w)
+	writer.Comma = ';'
+
+	_ = writer.Write([]string{
+		"№", "Статус", "Транспорт", "Прицеп", "Водитель", "Пропуск",
+		"Груз", "Контрагент", "Перевозчик", "Склад", "Тип операции",
+		"Брутто, т", "Тара, т", "Нетто, т",
+		"Первое взвешивание", "Второе взвешивание", "Создан",
+	})
+
+	for _, item := range items {
+		_ = writer.Write([]string{
+			strconv.FormatInt(item.ID, 10),
+			statusLabel(item.Status),
+			item.TransportNumber,
+			item.TrailerNumber,
+			item.DriverName,
+			item.PassNumber,
+			item.CargoName,
+			item.CounterpartyName,
+			item.CarrierName,
+			item.StorageName,
+			item.OperationTypeName,
+			csvWeight(&item.FirstWeightKg),
+			csvWeight(item.SecondWeightKg),
+			csvWeight(item.NetWeightKg),
+			item.FirstMeasuredAt.Format("02.01.2006 15:04"),
+			formatCSVTime(item.SecondMeasuredAt),
+			item.CreatedAt.Format("02.01.2006 15:04"),
+		})
+	}
+
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		slog.Error("export csv", "error", err)
+	}
+}
+
+func statusLabel(status string) string {
+	switch status {
+	case "open":
+		return "Открыт"
+	case "closed":
+		return "Закрыт"
+	case "cancelled":
+		return "Отменён"
+	default:
+		return status
+	}
+}
+
+func csvWeight(value *float64) string {
+	if value == nil {
+		return ""
+	}
+	return strings.ReplaceAll(strconv.FormatFloat(*value, 'f', 3, 64), ".", ",")
+}
+
+func formatCSVTime(value *time.Time) string {
+	if value == nil {
+		return ""
+	}
+	return value.Format("02.01.2006 15:04")
 }
 
 // Measurements: GET /spa/api/weighing/sessions/{id}/measurements
