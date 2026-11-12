@@ -27,12 +27,13 @@ services:
     env_file:
       - .env
     volumes:
-      - ./:/app
       - ./../symfony_documents_flow/config/jwt/public.pem:/config/jwt/public.pem:ro
     environment:
       WEIGHING_DB_URL: "postgresql://${DB_USER:-weighing}:${DB_PASSWORD:-weighing}@weighing_db:5432/${DB_NAME:-weighing_db}?sslmode=disable"
       JWT_PUBLIC_KEY_PATH: /config/jwt/public.pem
-    # Порт наружу не публикуем: доступ через nginx по project-net.
+    ports:
+      # Только localhost: в production доступ идёт через nginx (project-net).
+      - "127.0.0.1:${SERVER_PORT:-8089}:8089"
     networks:
       - weighing-net
       - project-net

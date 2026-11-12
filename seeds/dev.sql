@@ -1,6 +1,7 @@
 -- Демонстрационные данные для локальной разработки.
--- НЕ применять на продуктиве. Запуск:
---   Get-Content seeds/dev.sql -Raw | docker exec -i weighing_postgres psql -U weighing -d weighing_db
+-- НЕ применять на продуктиве. Запуск (docker cp сохраняет UTF-8):
+--   docker cp seeds/dev.sql weighing_postgres:/tmp/dev.sql
+--   docker exec weighing_postgres psql -U weighing -d weighing_db -f /tmp/dev.sql
 
 INSERT INTO dir_transport (name, black_list)
 SELECT value, false FROM (VALUES ('А123ВС77'), ('В456ЕК50'), ('М789ОР99'), ('Т321НА77'), ('К654РУ50')) AS seed(value)
