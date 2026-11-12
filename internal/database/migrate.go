@@ -86,7 +86,13 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 }
 
 func splitStatements(body string) []string {
-	raw := strings.Split(body, ";")
+	// Убираем строчные комментарии до разбиения: в них встречаются ";",
+	// которые иначе разрежут SQL на бессмысленные фрагменты.
+	// Ограничение: "--" внутри строковых литералов не поддерживается — в наших
+	// миграциях таких нет.
+	cleaned := stripLineComments(body)
+
+	raw := strings.Split(cleaned, ";")
 	statements := make([]string, 0, len(raw))
 
 	for _, part := range raw {
@@ -94,23 +100,18 @@ func splitStatements(body string) []string {
 		if statement == "" {
 			continue
 		}
-
-		// Убираем строки, состоящие только из комментариев.
-		lines := strings.Split(statement, "\n")
-		hasSQL := false
-		for _, line := range lines {
-			trimmed := strings.TrimSpace(line)
-			if trimmed != "" && !strings.HasPrefix(trimmed, "--") {
-				hasSQL = true
-				break
-			}
-		}
-		if !hasSQL {
-			continue
-		}
-
 		statements = append(statements, statement)
 	}
 
 	return statements
+}
+
+func stripLineComments(body string) string {
+	lines := strings.Split(body, "\n")
+	for index, line := range lines {
+		if comment := strings.Index(line, "--"); comment >= 0 {
+			lines[index] = line[:comment]
+		}
+	}
+	return strings.Join(lines, "\n")
 }

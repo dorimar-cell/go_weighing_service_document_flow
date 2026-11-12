@@ -14,13 +14,13 @@ import (
 )
 
 type Config struct {
-	Env             string
-	Port            string
-	DatabaseURL     string
-	AuthMode        string
+	Env              string
+	Port             string
+	DatabaseURL      string
+	AuthMode         string
 	JWTPublicKeyPath string
-	CORSOrigins     []string
-	DBMaxConns      int32
+	CORSOrigins      []string
+	DBMaxConns       int32
 }
 
 func Load() *Config {
