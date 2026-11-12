@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"go_weighing_service/internal/dto"
 	"go_weighing_service/internal/repository"
 	"go_weighing_service/internal/service"
@@ -121,6 +123,12 @@ func (h *SessionHandler) handleError(w http.ResponseWriter, err error) {
 
 	if errors.Is(err, repository.ErrConflict) {
 		writeError(w, http.StatusConflict, "conflict", err.Error())
+		return
+	}
+
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+		writeError(w, http.StatusBadRequest, "invalid_reference", "Выбранный элемент справочника не найден")
 		return
 	}
 

@@ -23,7 +23,23 @@ JOIN weighing_info wi ON wi.id = w.id_weighting_info
 JOIN com_dir_transport_driver_trailer c ON c.id = wi.id_com_transport_driver_trailer
 JOIN dir_transport t ON t.id = c.id_dir_transport
 LEFT JOIN dir_trailer tr ON tr.id = c.id_dir_trailer
-LEFT JOIN dir_driver d ON d.id = c.id_dir_driver`
+LEFT JOIN dir_driver d ON d.id = c.id_dir_driver
+LEFT JOIN dir_invoice inv ON inv.id = wi.id_dir_invoice
+LEFT JOIN dir_carrier cr ON cr.id = inv.id_dir_carrier
+LEFT JOIN dir_counterparty cp ON cp.id = inv.id_dir_counterparty
+LEFT JOIN dir_type_of_operation ot ON ot.id = inv.id_dir_type_of_operation
+LEFT JOIN LATERAL (
+    SELECT cg.id AS cargo_id,
+           cg.name AS cargo_name,
+           st.id AS storage_id,
+           st.name AS storage_name
+    FROM com_dir_invoice_dir_storage cids
+    LEFT JOIN dir_cargo cg ON cg.id = cids.id_dir_cargo
+    LEFT JOIN dir_storage st ON st.id = cids.id_dir_storage
+    WHERE cids.id_dir_invoice = inv.id AND cids.deleted = false
+    ORDER BY cids.id
+    LIMIT 1
+) line ON true`
 
 const sessionSelect = `
 SELECT w.id,
@@ -36,7 +52,17 @@ SELECT w.id,
        w.date_time_second_weight,
        w.flag_weight,
        w.deleted,
-       w.created_date` + sessionFrom
+       w.created_date,
+       COALESCE(line.cargo_id, 0),
+       COALESCE(line.cargo_name, ''),
+       COALESCE(cp.id, 0),
+       COALESCE(cp.name, ''),
+       COALESCE(cr.id, 0),
+       COALESCE(cr.name, ''),
+       COALESCE(line.storage_id, 0),
+       COALESCE(line.storage_name, ''),
+       COALESCE(ot.id, 0),
+       COALESCE(ot.name, '')` + sessionFrom
 
 type SessionRepository struct {
 	pool *pgxpool.Pool
@@ -96,12 +122,17 @@ func (r *SessionRepository) Create(ctx context.Context, req dto.CreateSessionReq
 		return nil, fmt.Errorf("insert transport link: %w", err)
 	}
 
+	invoiceID, err := createInvoice(ctx, tx, req)
+	if err != nil {
+		return nil, err
+	}
+
 	var infoID int64
 	if err := tx.QueryRow(ctx, `
-		INSERT INTO weighing_info (id_com_transport_driver_trailer, deleted, created_by_user_id, created_date)
-		VALUES ($1, false, 1, now())
+		INSERT INTO weighing_info (id_com_transport_driver_trailer, id_dir_invoice, deleted, created_by_user_id, created_date)
+		VALUES ($1, $2, false, 1, now())
 		RETURNING id`,
-		linkID,
+		linkID, invoiceID,
 	).Scan(&infoID); err != nil {
 		return nil, fmt.Errorf("insert weighing_info: %w", err)
 	}
@@ -349,6 +380,39 @@ func insertMeasurement(
 	return nil
 }
 
+// createInvoice сохраняет груз/контрагента/перевозчика/склад/тип операции.
+// Если ничего не выбрано, накладная не создаётся.
+func createInvoice(ctx context.Context, tx pgx.Tx, req dto.CreateSessionRequest) (*int64, error) {
+	if req.CargoID == nil && req.StorageID == nil && req.CounterpartyID == nil &&
+		req.CarrierID == nil && req.OperationTypeID == nil {
+		return nil, nil
+	}
+
+	var invoiceID int64
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO dir_invoice
+			(name, id_dir_carrier, id_dir_counterparty, id_dir_type_of_operation, date, time, deleted, created_by_user_id, created_date)
+		VALUES ('', $1, $2, $3, current_date, current_time, false, 1, now())
+		RETURNING id`,
+		req.CarrierID, req.CounterpartyID, req.OperationTypeID,
+	).Scan(&invoiceID); err != nil {
+		return nil, fmt.Errorf("insert invoice: %w", err)
+	}
+
+	if req.CargoID != nil || req.StorageID != nil {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO com_dir_invoice_dir_storage
+				(id_dir_cargo, id_dir_invoice, id_dir_storage, deleted, created_by_user_id, created_date)
+			VALUES ($1, $2, $3, false, 1, now())`,
+			req.CargoID, invoiceID, req.StorageID,
+		); err != nil {
+			return nil, fmt.Errorf("insert invoice line: %w", err)
+		}
+	}
+
+	return &invoiceID, nil
+}
+
 func findOrCreateNamed(ctx context.Context, tx pgx.Tx, table, name string) (int64, error) {
 	var id int64
 	selectQuery := fmt.Sprintf(
@@ -394,6 +458,7 @@ func scanSession(row scanner) (*dto.SessionDTO, error) {
 	var secondWeight sql.NullFloat64
 	var secondAt sql.NullTime
 	var flagWeight, deleted bool
+	var cargoID, counterpartyID, carrierID, storageID, operationTypeID int64
 
 	if err := row.Scan(
 		&item.ID,
@@ -407,8 +472,34 @@ func scanSession(row scanner) (*dto.SessionDTO, error) {
 		&flagWeight,
 		&deleted,
 		&item.CreatedAt,
+		&cargoID,
+		&item.CargoName,
+		&counterpartyID,
+		&item.CounterpartyName,
+		&carrierID,
+		&item.CarrierName,
+		&storageID,
+		&item.StorageName,
+		&operationTypeID,
+		&item.OperationTypeName,
 	); err != nil {
 		return nil, err
+	}
+
+	if cargoID != 0 {
+		item.CargoID = &cargoID
+	}
+	if counterpartyID != 0 {
+		item.CounterpartyID = &counterpartyID
+	}
+	if carrierID != 0 {
+		item.CarrierID = &carrierID
+	}
+	if storageID != 0 {
+		item.StorageID = &storageID
+	}
+	if operationTypeID != 0 {
+		item.OperationTypeID = &operationTypeID
 	}
 
 	if secondWeight.Valid {
