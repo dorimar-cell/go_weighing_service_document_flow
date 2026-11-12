@@ -26,6 +26,7 @@ type CreateSessionRequest struct {
 	CarrierID       *int64         `json:"carrierId"`
 	StorageID       *int64         `json:"storageId"`
 	OperationTypeID *int64         `json:"operationTypeId"`
+	PassID          *int64         `json:"passId"`
 }
 
 // CloseSessionRequest — второе взвешивание.
@@ -57,6 +58,9 @@ type SessionDTO struct {
 	StorageName       string `json:"storageName"`
 	OperationTypeID   *int64 `json:"operationTypeId"`
 	OperationTypeName string `json:"operationTypeName"`
+
+	PassID     *int64 `json:"passId"`
+	PassNumber string `json:"passNumber"`
 }
 
 // SessionListResponse — постраничный журнал.

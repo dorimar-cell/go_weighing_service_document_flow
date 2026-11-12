@@ -50,14 +50,19 @@ func main() {
 	dictionaryHandler := handler.NewDictionaryHandler(dictionaryService)
 
 	measurementVerifier := service.NewMeasurementVerifier(cfg)
+	passRepo := repository.NewPassRepository(pool)
+	passService := service.NewPassService(passRepo)
+	passHandler := handler.NewPassHandler(passService)
+
 	sessionRepo := repository.NewSessionRepository(pool)
-	sessionService := service.NewSessionService(sessionRepo, measurementVerifier)
+	sessionService := service.NewSessionService(sessionRepo, passRepo, measurementVerifier)
 	sessionHandler := handler.NewSessionHandler(sessionService)
 
 	router := app.NewRouter(
 		app.Handlers{
 			Dictionary: dictionaryHandler,
 			Session:    sessionHandler,
+			Pass:       passHandler,
 		},
 		auth,
 		cfg.CORSOrigins,

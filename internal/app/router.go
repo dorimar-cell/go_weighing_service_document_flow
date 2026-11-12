@@ -14,6 +14,7 @@ import (
 type Handlers struct {
 	Dictionary *handler.DictionaryHandler
 	Session    *handler.SessionHandler
+	Pass       *handler.PassHandler
 }
 
 func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *chi.Mux {
@@ -44,6 +45,10 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 		r.Get("/sessions/{id}", handlers.Session.Get)
 		r.Post("/sessions/{id}/second", handlers.Session.Close)
 		r.Post("/sessions/{id}/cancel", handlers.Session.Cancel)
+
+		r.Post("/passes", handlers.Pass.Create)
+		r.Get("/passes", handlers.Pass.List)
+		r.Get("/passes/{id}", handlers.Pass.Get)
 	})
 
 	return router

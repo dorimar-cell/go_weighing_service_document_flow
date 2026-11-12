@@ -24,6 +24,7 @@ JOIN com_dir_transport_driver_trailer c ON c.id = wi.id_com_transport_driver_tra
 JOIN dir_transport t ON t.id = c.id_dir_transport
 LEFT JOIN dir_trailer tr ON tr.id = c.id_dir_trailer
 LEFT JOIN dir_driver d ON d.id = c.id_dir_driver
+LEFT JOIN reg_weight rw ON rw.id = w.id_reg_weight
 LEFT JOIN dir_invoice inv ON inv.id = wi.id_dir_invoice
 LEFT JOIN dir_carrier cr ON cr.id = inv.id_dir_carrier
 LEFT JOIN dir_counterparty cp ON cp.id = inv.id_dir_counterparty
@@ -62,7 +63,9 @@ SELECT w.id,
        COALESCE(line.storage_id, 0),
        COALESCE(line.storage_name, ''),
        COALESCE(ot.id, 0),
-       COALESCE(ot.name, '')` + sessionFrom
+       COALESCE(ot.name, ''),
+       COALESCE(rw.id, 0),
+       COALESCE(rw.name, '')` + sessionFrom
 
 type SessionRepository struct {
 	pool *pgxpool.Pool
@@ -142,10 +145,10 @@ func (r *SessionRepository) Create(ctx context.Context, req dto.CreateSessionReq
 		INSERT INTO weighing
 			(id_weighting_info, first_weight, flag_weight, deleted, created_by_user_id, created_date,
 			 id_first_weight_user, date_time_first_weight, ref,
-			 first_weight_1c, is_flow_weight, has_edited, second_weight_1c)
-		VALUES ($1, $2, false, false, 1, now(), 1, $3, gen_random_uuid(), false, false, false, false)
+			 first_weight_1c, is_flow_weight, has_edited, second_weight_1c, id_reg_weight)
+		VALUES ($1, $2, false, false, 1, now(), 1, $3, gen_random_uuid(), false, false, false, false, $4)
 		RETURNING id`,
-		infoID, req.Measurement.WeightKg, req.Measurement.MeasuredAt,
+		infoID, req.Measurement.WeightKg, req.Measurement.MeasuredAt, req.PassID,
 	).Scan(&weighingID); err != nil {
 		return nil, fmt.Errorf("insert weighing: %w", err)
 	}
@@ -171,9 +174,10 @@ func (r *SessionRepository) Close(ctx context.Context, id int64, measurement dto
 
 	var firstWeight float64
 	var flagWeight, deleted bool
+	var passID sql.NullInt64
 	if err := tx.QueryRow(ctx,
-		`SELECT first_weight, flag_weight, deleted FROM weighing WHERE id = $1 FOR UPDATE`, id,
-	).Scan(&firstWeight, &flagWeight, &deleted); err != nil {
+		`SELECT first_weight, flag_weight, deleted, id_reg_weight FROM weighing WHERE id = $1 FOR UPDATE`, id,
+	).Scan(&firstWeight, &flagWeight, &deleted, &passID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -217,6 +221,15 @@ func (r *SessionRepository) Close(ctx context.Context, id int64, measurement dto
 
 	if err := insertMeasurement(ctx, tx, id, 2, measurement); err != nil {
 		return nil, err
+	}
+
+	if passID.Valid {
+		if _, err := tx.Exec(ctx,
+			`UPDATE reg_weight SET pass_enabled = false WHERE id = $1 AND id_system_dir_type_of_pass = 3`,
+			passID.Int64,
+		); err != nil {
+			return nil, fmt.Errorf("close one-time pass: %w", err)
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -458,7 +471,7 @@ func scanSession(row scanner) (*dto.SessionDTO, error) {
 	var secondWeight sql.NullFloat64
 	var secondAt sql.NullTime
 	var flagWeight, deleted bool
-	var cargoID, counterpartyID, carrierID, storageID, operationTypeID int64
+	var cargoID, counterpartyID, carrierID, storageID, operationTypeID, passID int64
 
 	if err := row.Scan(
 		&item.ID,
@@ -482,6 +495,8 @@ func scanSession(row scanner) (*dto.SessionDTO, error) {
 		&item.StorageName,
 		&operationTypeID,
 		&item.OperationTypeName,
+		&passID,
+		&item.PassNumber,
 	); err != nil {
 		return nil, err
 	}
@@ -500,6 +515,9 @@ func scanSession(row scanner) (*dto.SessionDTO, error) {
 	}
 	if operationTypeID != 0 {
 		item.OperationTypeID = &operationTypeID
+	}
+	if passID != 0 {
+		item.PassID = &passID
 	}
 
 	if secondWeight.Valid {

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -11,17 +12,54 @@ import (
 
 type SessionService struct {
 	repo     *repository.SessionRepository
+	passes   *repository.PassRepository
 	verifier *MeasurementVerifier
 }
 
-func NewSessionService(repo *repository.SessionRepository, verifier *MeasurementVerifier) *SessionService {
-	return &SessionService{repo: repo, verifier: verifier}
+func NewSessionService(
+	repo *repository.SessionRepository,
+	passes *repository.PassRepository,
+	verifier *MeasurementVerifier,
+) *SessionService {
+	return &SessionService{repo: repo, passes: passes, verifier: verifier}
 }
 
 func (s *SessionService) Create(ctx context.Context, request dto.CreateSessionRequest) (*dto.SessionDTO, error) {
 	request.TransportNumber = strings.TrimSpace(request.TransportNumber)
 	request.TrailerNumber = strings.TrimSpace(request.TrailerNumber)
 	request.DriverName = strings.TrimSpace(request.DriverName)
+
+	if request.PassID != nil {
+		pass, err := s.passes.Get(ctx, *request.PassID)
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				return nil, &ValidationError{Message: "Пропуск не найден"}
+			}
+			return nil, err
+		}
+		if !pass.PassEnabled {
+			return nil, &ValidationError{Message: "Пропуск неактивен"}
+		}
+
+		if request.TransportNumber == "" {
+			request.TransportNumber = pass.TransportNumber
+		}
+		if request.TrailerNumber == "" {
+			request.TrailerNumber = pass.TrailerNumber
+		}
+		if request.DriverName == "" {
+			request.DriverName = pass.DriverName
+		}
+		if request.CargoID == nil {
+			request.CargoID = pass.CargoID
+		}
+		if request.CounterpartyID == nil {
+			request.CounterpartyID = pass.CounterpartyID
+		}
+		if request.CarrierID == nil {
+			request.CarrierID = pass.CarrierID
+		}
+	}
 
 	if request.TransportNumber == "" {
 		return nil, &ValidationError{Message: "Укажите номер транспортного средства"}
