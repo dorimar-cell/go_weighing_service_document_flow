@@ -41,6 +41,7 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 		r.Post("/dictionaries/{code}/{id}/restore", handlers.Dictionary.Restore)
 
 		r.Post("/sessions", handlers.Session.Create)
+		r.Post("/sessions/flow", handlers.Session.Flow)
 		r.Get("/sessions", handlers.Session.List)
 		r.Get("/sessions/{id}", handlers.Session.Get)
 		r.Post("/sessions/{id}/second", handlers.Session.Close)

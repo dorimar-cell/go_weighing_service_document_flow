@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -234,6 +235,68 @@ func (r *SessionRepository) Close(ctx context.Context, id int64, measurement dto
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit close session: %w", err)
+	}
+
+	return r.Get(ctx, id)
+}
+
+// CloseWithManualTare закрывает рейс в поточном режиме: тара вводится вручную.
+func (r *SessionRepository) CloseWithManualTare(
+	ctx context.Context,
+	id int64,
+	tareKg float64,
+	measuredAt time.Time,
+) (*dto.SessionDTO, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin flow close: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var flagWeight, deleted bool
+	var passID sql.NullInt64
+	if err := tx.QueryRow(ctx,
+		`SELECT flag_weight, deleted, id_reg_weight FROM weighing WHERE id = $1 FOR UPDATE`, id,
+	).Scan(&flagWeight, &deleted, &passID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("lock weighing: %w", err)
+	}
+
+	if deleted {
+		return nil, fmt.Errorf("%w: взвешивание отменено", ErrConflict)
+	}
+	if flagWeight {
+		return nil, fmt.Errorf("%w: взвешивание уже завершено", ErrConflict)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE weighing
+		SET second_weight = $2,
+		    handle_second_weight = $2,
+		    date_time_second_weight = $3,
+		    flag_weight = true,
+		    id_second_weight_user = 1,
+		    modified_by_user_id = 1,
+		    modified_date = now()
+		WHERE id = $1`,
+		id, tareKg, measuredAt,
+	); err != nil {
+		return nil, fmt.Errorf("update flow weighing: %w", err)
+	}
+
+	if passID.Valid {
+		if _, err := tx.Exec(ctx,
+			`UPDATE reg_weight SET pass_enabled = false WHERE id = $1 AND id_system_dir_type_of_pass = 3`,
+			passID.Int64,
+		); err != nil {
+			return nil, fmt.Errorf("close one-time pass: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit flow close: %w", err)
 	}
 
 	return r.Get(ctx, id)

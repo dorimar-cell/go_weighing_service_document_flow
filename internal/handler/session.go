@@ -38,6 +38,23 @@ func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, session)
 }
 
+// Flow: POST /spa/api/weighing/sessions/flow
+func (h *SessionHandler) Flow(w http.ResponseWriter, r *http.Request) {
+	var request dto.FlowSessionRequest
+	if err := decodeJSON(w, r, &request); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+		return
+	}
+
+	session, err := h.service.CreateFlow(r.Context(), request)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, session)
+}
+
 // Close: POST /spa/api/weighing/sessions/{id}/second
 func (h *SessionHandler) Close(w http.ResponseWriter, r *http.Request) {
 	id, err := parseID(r)

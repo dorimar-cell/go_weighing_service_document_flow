@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"go_weighing_service/internal/dto"
 	"go_weighing_service/internal/repository"
@@ -69,6 +70,26 @@ func (s *SessionService) Create(ctx context.Context, request dto.CreateSessionRe
 	}
 
 	return s.repo.Create(ctx, request)
+}
+
+// CreateFlow — поточный режим: рейс сразу закрывается введённой тарой.
+func (s *SessionService) CreateFlow(
+	ctx context.Context,
+	request dto.FlowSessionRequest,
+) (*dto.SessionDTO, error) {
+	if request.TareKg <= 0 {
+		return nil, &ValidationError{Message: "Укажите тару больше нуля"}
+	}
+	if request.TareKg >= request.Measurement.WeightKg {
+		return nil, &ValidationError{Message: "Тара должна быть меньше брутто"}
+	}
+
+	session, err := s.Create(ctx, request.CreateSessionRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.repo.CloseWithManualTare(ctx, session.ID, request.TareKg, time.Now())
 }
 
 func (s *SessionService) Close(

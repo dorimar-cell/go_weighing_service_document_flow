@@ -29,6 +29,12 @@ type CreateSessionRequest struct {
 	PassID          *int64         `json:"passId"`
 }
 
+// FlowSessionRequest — поточное взвешивание: брутто с весов, тара вручную.
+type FlowSessionRequest struct {
+	CreateSessionRequest
+	TareKg float64 `json:"tareKg"`
+}
+
 // CloseSessionRequest — второе взвешивание.
 type CloseSessionRequest struct {
 	Measurement MeasurementDTO `json:"measurement"`
