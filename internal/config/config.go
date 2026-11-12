@@ -20,6 +20,7 @@ type Config struct {
 	AuthMode         string
 	JWTPublicKeyPath string
 	AgentSigningKey  string
+	PhotoDir         string
 	CORSOrigins      []string
 	DBMaxConns       int32
 }
@@ -36,6 +37,7 @@ func Load() *Config {
 		AuthMode:         getEnv("AUTH_MODE", "dev"),
 		JWTPublicKeyPath: getEnv("JWT_PUBLIC_KEY_PATH", "../symfony_documents_flow/config/jwt/public.pem"),
 		AgentSigningKey:  getEnv("WEIGHING_AGENT_SIGNING_KEY", "dev-signing-key-change-me"),
+		PhotoDir:         getEnv("WEIGHING_PHOTO_DIR", "data/photos"),
 		CORSOrigins:      splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3001")),
 		DBMaxConns:       int32(getEnvAsInt("DB_MAX_CONNS", 10)),
 	}

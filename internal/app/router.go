@@ -15,6 +15,7 @@ type Handlers struct {
 	Dictionary *handler.DictionaryHandler
 	Session    *handler.SessionHandler
 	Pass       *handler.PassHandler
+	Photo      *handler.PhotoHandler
 }
 
 func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *chi.Mux {
@@ -48,6 +49,9 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 		r.Get("/sessions/{id}/measurements", handlers.Session.Measurements)
 		r.Post("/sessions/{id}/second", handlers.Session.Close)
 		r.Post("/sessions/{id}/cancel", handlers.Session.Cancel)
+		r.Post("/sessions/{id}/photos", handlers.Photo.Upload)
+		r.Get("/sessions/{id}/photos", handlers.Photo.List)
+		r.Get("/sessions/{id}/photos/{photoId}/file", handlers.Photo.File)
 
 		r.Post("/passes", handlers.Pass.Create)
 		r.Get("/passes", handlers.Pass.List)

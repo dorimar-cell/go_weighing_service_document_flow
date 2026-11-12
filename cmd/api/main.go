@@ -58,11 +58,16 @@ func main() {
 	sessionService := service.NewSessionService(sessionRepo, passRepo, measurementVerifier)
 	sessionHandler := handler.NewSessionHandler(sessionService)
 
+	photoRepo := repository.NewPhotoRepository(pool)
+	photoService := service.NewPhotoService(photoRepo, cfg.PhotoDir)
+	photoHandler := handler.NewPhotoHandler(photoService)
+
 	router := app.NewRouter(
 		app.Handlers{
 			Dictionary: dictionaryHandler,
 			Session:    sessionHandler,
 			Pass:       passHandler,
+			Photo:      photoHandler,
 		},
 		auth,
 		cfg.CORSOrigins,

@@ -88,3 +88,12 @@ type MeasurementRecord struct {
 	MeasuredAt  time.Time `json:"measuredAt"`
 	Checksum    string    `json:"checksum"`
 }
+
+// PhotoDTO — фото рейса.
+type PhotoDTO struct {
+	ID          int64     `json:"id"`
+	FileName    string    `json:"fileName"`
+	FirstWeight bool      `json:"firstWeight"`
+	CreatedAt   time.Time `json:"createdAt"`
+	URL         string    `json:"url"`
+}

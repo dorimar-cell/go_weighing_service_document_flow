@@ -27,6 +27,7 @@ services:
     env_file:
       - .env
     volumes:
+      - ./data/photos:/app/data/photos
       - ./../symfony_documents_flow/config/jwt/public.pem:/config/jwt/public.pem:ro
     environment:
       WEIGHING_DB_URL: "postgresql://${DB_USER:-weighing}:${DB_PASSWORD:-weighing}@weighing_db:5432/${DB_NAME:-weighing_db}?sslmode=disable"
