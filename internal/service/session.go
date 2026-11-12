@@ -110,6 +110,9 @@ func (s *SessionService) Close(
 func (s *SessionService) List(
 	ctx context.Context,
 	status string,
+	search string,
+	dateFrom *time.Time,
+	dateTo *time.Time,
 	page int,
 	pageSize int,
 ) (*dto.SessionListResponse, error) {
@@ -124,7 +127,7 @@ func (s *SessionService) List(
 	}
 
 	page, pageSize = normalizePaging(page, pageSize)
-	return s.repo.List(ctx, status, page, pageSize)
+	return s.repo.List(ctx, status, strings.TrimSpace(search), dateFrom, dateTo, page, pageSize)
 }
 
 func (s *SessionService) Get(ctx context.Context, id int64) (*dto.SessionDTO, error) {
@@ -139,4 +142,11 @@ func (s *SessionService) Cancel(ctx context.Context, id int64) error {
 		return &ValidationError{Message: "Некорректный идентификатор рейса"}
 	}
 	return s.repo.Cancel(ctx, id)
+}
+
+func (s *SessionService) Measurements(ctx context.Context, id int64) ([]dto.MeasurementRecord, error) {
+	if id <= 0 {
+		return nil, &ValidationError{Message: "Некорректный идентификатор рейса"}
+	}
+	return s.repo.Measurements(ctx, id)
 }

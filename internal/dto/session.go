@@ -76,3 +76,15 @@ type SessionListResponse struct {
 	PageSize int          `json:"pageSize"`
 	Total    int          `json:"total"`
 }
+
+// MeasurementRecord — сохранённое измерение из истории рейса.
+type MeasurementRecord struct {
+	OperationID string    `json:"operationId"`
+	Kind        int       `json:"kind"`
+	WeightKg    float64   `json:"weightKg"`
+	Stable      bool      `json:"stable"`
+	Terminal    string    `json:"terminal"`
+	Platform    int       `json:"platform"`
+	MeasuredAt  time.Time `json:"measuredAt"`
+	Checksum    string    `json:"checksum"`
+}

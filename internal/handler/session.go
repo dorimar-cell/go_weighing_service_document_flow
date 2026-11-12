@@ -5,6 +5,8 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 
@@ -81,10 +83,22 @@ func (h *SessionHandler) Close(w http.ResponseWriter, r *http.Request) {
 // List: GET /spa/api/weighing/sessions?status=open&page=1&pageSize=25
 func (h *SessionHandler) List(w http.ResponseWriter, r *http.Request) {
 	status := r.URL.Query().Get("status")
+	search := r.URL.Query().Get("search")
 	page := parseQueryInt(r, "page", 1)
 	pageSize := parseQueryInt(r, "pageSize", 25)
 
-	result, err := h.service.List(r.Context(), status, page, pageSize)
+	dateFrom, err := parseDateParam(r.URL.Query().Get("dateFrom"), false)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_date", err.Error())
+		return
+	}
+	dateTo, err := parseDateParam(r.URL.Query().Get("dateTo"), true)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_date", err.Error())
+		return
+	}
+
+	result, err := h.service.List(r.Context(), status, search, dateFrom, dateTo, page, pageSize)
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -108,6 +122,23 @@ func (h *SessionHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, session)
+}
+
+// Measurements: GET /spa/api/weighing/sessions/{id}/measurements
+func (h *SessionHandler) Measurements(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_id", "Некорректный идентификатор рейса")
+		return
+	}
+
+	items, err := h.service.Measurements(r.Context(), id)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 // Cancel: POST /spa/api/weighing/sessions/{id}/cancel
@@ -165,4 +196,22 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
 	}
 
 	return nil
+}
+
+func parseDateParam(value string, endOfDay bool) (*time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil, nil
+	}
+
+	parsed, err := time.ParseInLocation("2006-01-02", value, time.UTC)
+	if err != nil {
+		return nil, errors.New("Дата должна быть в формате ГГГГ-ММ-ДД")
+	}
+
+	if endOfDay {
+		parsed = parsed.Add(24 * time.Hour)
+	}
+
+	return &parsed, nil
 }

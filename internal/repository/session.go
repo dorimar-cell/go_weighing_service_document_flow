@@ -302,18 +302,31 @@ func (r *SessionRepository) CloseWithManualTare(
 	return r.Get(ctx, id)
 }
 
-func (r *SessionRepository) List(ctx context.Context, status string, page, pageSize int) (*dto.SessionListResponse, error) {
-	where := sessionWhere(status)
+func (r *SessionRepository) List(
+	ctx context.Context,
+	status string,
+	search string,
+	dateFrom *time.Time,
+	dateTo *time.Time,
+	page int,
+	pageSize int,
+) (*dto.SessionListResponse, error) {
+	where, args := buildSessionWhere(status, search, dateFrom, dateTo)
 
 	var total int
-	if err := r.pool.QueryRow(ctx, "SELECT count(*) "+sessionFrom+" "+where).Scan(&total); err != nil {
+	if err := r.pool.QueryRow(ctx, "SELECT count(*) "+sessionFrom+" "+where, args...).Scan(&total); err != nil {
 		return nil, fmt.Errorf("count sessions: %w", err)
 	}
 
-	query := sessionSelect + " " + where +
-		" ORDER BY w.created_date DESC LIMIT $1 OFFSET $2"
+	args = append(args, pageSize)
+	limitArg := len(args)
+	args = append(args, (page-1)*pageSize)
+	offsetArg := len(args)
 
-	rows, err := r.pool.Query(ctx, query, pageSize, (page-1)*pageSize)
+	query := sessionSelect + " " + where +
+		fmt.Sprintf(" ORDER BY w.created_date DESC LIMIT $%d OFFSET $%d", limitArg, offsetArg)
+
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list sessions: %w", err)
 	}
@@ -337,6 +350,45 @@ func (r *SessionRepository) List(ctx context.Context, status string, page, pageS
 		PageSize: pageSize,
 		Total:    total,
 	}, nil
+}
+
+// Measurements возвращает историю измерений рейса.
+func (r *SessionRepository) Measurements(
+	ctx context.Context,
+	id int64,
+) ([]dto.MeasurementRecord, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT operation_id, kind, weight_kg::float8, stable, terminal, platform, measured_at, checksum
+		FROM weighing_measurement
+		WHERE id_weighing = $1
+		ORDER BY kind, measured_at`, id)
+	if err != nil {
+		return nil, fmt.Errorf("list measurements: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]dto.MeasurementRecord, 0, 2)
+	for rows.Next() {
+		var item dto.MeasurementRecord
+		if err := rows.Scan(
+			&item.OperationID,
+			&item.Kind,
+			&item.WeightKg,
+			&item.Stable,
+			&item.Terminal,
+			&item.Platform,
+			&item.MeasuredAt,
+			&item.Checksum,
+		); err != nil {
+			return nil, fmt.Errorf("scan measurement: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate measurements: %w", err)
+	}
+
+	return items, nil
 }
 
 func (r *SessionRepository) Get(ctx context.Context, id int64) (*dto.SessionDTO, error) {
@@ -512,17 +564,48 @@ func findOrCreateNamed(ctx context.Context, tx pgx.Tx, table, name string) (int6
 	return id, nil
 }
 
-func sessionWhere(status string) string {
+func buildSessionWhere(
+	status string,
+	search string,
+	dateFrom *time.Time,
+	dateTo *time.Time,
+) (string, []any) {
+	where := []string{"1 = 1"}
+	args := make([]any, 0, 3)
+
 	switch status {
 	case "open":
-		return "WHERE w.flag_weight = false AND w.deleted = false"
+		where = append(where, "w.flag_weight = false AND w.deleted = false")
 	case "closed":
-		return "WHERE w.flag_weight = true AND w.deleted = false"
+		where = append(where, "w.flag_weight = true AND w.deleted = false")
 	case "cancelled":
-		return "WHERE w.deleted = true"
+		where = append(where, "w.deleted = true")
+	case "all", "":
+		// без фильтра
 	default:
-		return "WHERE 1 = 1"
+		where = append(where, "1 = 0")
 	}
+
+	if term := strings.TrimSpace(search); term != "" {
+		args = append(args, "%"+term+"%")
+		position := len(args)
+		where = append(where, fmt.Sprintf(
+			"(t.name ILIKE $%d OR COALESCE(tr.name, '') ILIKE $%d OR COALESCE(rw.name, '') ILIKE $%d)",
+			position, position, position,
+		))
+	}
+
+	if dateFrom != nil {
+		args = append(args, *dateFrom)
+		where = append(where, fmt.Sprintf("w.date_time_first_weight >= $%d", len(args)))
+	}
+
+	if dateTo != nil {
+		args = append(args, *dateTo)
+		where = append(where, fmt.Sprintf("w.date_time_first_weight < $%d", len(args)))
+	}
+
+	return " WHERE " + strings.Join(where, " AND "), args
 }
 
 type scanner interface {
