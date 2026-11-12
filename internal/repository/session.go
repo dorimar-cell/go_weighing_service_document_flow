@@ -1,0 +1,435 @@
+package repository
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"math"
+	"strings"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"go_weighing_service/internal/dto"
+)
+
+var ErrConflict = errors.New("conflict")
+
+const sessionFrom = `
+FROM weighing w
+JOIN weighing_info wi ON wi.id = w.id_weighting_info
+JOIN com_dir_transport_driver_trailer c ON c.id = wi.id_com_transport_driver_trailer
+JOIN dir_transport t ON t.id = c.id_dir_transport
+LEFT JOIN dir_trailer tr ON tr.id = c.id_dir_trailer
+LEFT JOIN dir_driver d ON d.id = c.id_dir_driver`
+
+const sessionSelect = `
+SELECT w.id,
+       t.name,
+       COALESCE(tr.name, ''),
+       COALESCE(d.name, ''),
+       w.first_weight,
+       w.second_weight,
+       w.date_time_first_weight,
+       w.date_time_second_weight,
+       w.flag_weight,
+       w.deleted,
+       w.created_date` + sessionFrom
+
+type SessionRepository struct {
+	pool *pgxpool.Pool
+}
+
+func NewSessionRepository(pool *pgxpool.Pool) *SessionRepository {
+	return &SessionRepository{pool: pool}
+}
+
+// Create создаёт первое взвешивание. operationId делает операцию идемпотентной.
+func (r *SessionRepository) Create(ctx context.Context, req dto.CreateSessionRequest) (*dto.SessionDTO, error) {
+	existing, err := r.findByOperation(ctx, req.Measurement.OperationID)
+	if err != nil {
+		return nil, err
+	}
+	if existing != 0 {
+		return r.Get(ctx, existing)
+	}
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin create session: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	transportID, err := findOrCreateNamed(ctx, tx, "dir_transport", req.TransportNumber)
+	if err != nil {
+		return nil, err
+	}
+
+	var trailerID *int64
+	if strings.TrimSpace(req.TrailerNumber) != "" {
+		id, err := findOrCreateNamed(ctx, tx, "dir_trailer", req.TrailerNumber)
+		if err != nil {
+			return nil, err
+		}
+		trailerID = &id
+	}
+
+	var driverID *int64
+	if strings.TrimSpace(req.DriverName) != "" {
+		id, err := findOrCreateNamed(ctx, tx, "dir_driver", req.DriverName)
+		if err != nil {
+			return nil, err
+		}
+		driverID = &id
+	}
+
+	var linkID int64
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO com_dir_transport_driver_trailer
+			(id_dir_driver, id_dir_transport, id_dir_trailer, deleted, created_by_user_id, created_date)
+		VALUES ($1, $2, $3, false, 1, now())
+		RETURNING id`,
+		driverID, transportID, trailerID,
+	).Scan(&linkID); err != nil {
+		return nil, fmt.Errorf("insert transport link: %w", err)
+	}
+
+	var infoID int64
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO weighing_info (id_com_transport_driver_trailer, deleted, created_by_user_id, created_date)
+		VALUES ($1, false, 1, now())
+		RETURNING id`,
+		linkID,
+	).Scan(&infoID); err != nil {
+		return nil, fmt.Errorf("insert weighing_info: %w", err)
+	}
+
+	var weighingID int64
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO weighing
+			(id_weighting_info, first_weight, flag_weight, deleted, created_by_user_id, created_date,
+			 id_first_weight_user, date_time_first_weight, ref,
+			 first_weight_1c, is_flow_weight, has_edited, second_weight_1c)
+		VALUES ($1, $2, false, false, 1, now(), 1, $3, gen_random_uuid(), false, false, false, false)
+		RETURNING id`,
+		infoID, req.Measurement.WeightKg, req.Measurement.MeasuredAt,
+	).Scan(&weighingID); err != nil {
+		return nil, fmt.Errorf("insert weighing: %w", err)
+	}
+
+	if err := insertMeasurement(ctx, tx, weighingID, 1, req.Measurement); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit create session: %w", err)
+	}
+
+	return r.Get(ctx, weighingID)
+}
+
+// Close закрывает вторым взвешиванием.
+func (r *SessionRepository) Close(ctx context.Context, id int64, measurement dto.MeasurementDTO) (*dto.SessionDTO, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin close session: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var firstWeight float64
+	var flagWeight, deleted bool
+	if err := tx.QueryRow(ctx,
+		`SELECT first_weight, flag_weight, deleted FROM weighing WHERE id = $1 FOR UPDATE`, id,
+	).Scan(&firstWeight, &flagWeight, &deleted); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("lock weighing: %w", err)
+	}
+
+	if deleted {
+		return nil, fmt.Errorf("%w: взвешивание отменено", ErrConflict)
+	}
+	if flagWeight {
+		return nil, fmt.Errorf("%w: взвешивание уже завершено", ErrConflict)
+	}
+
+	existing, err := findByOperationTx(ctx, tx, measurement.OperationID)
+	if err != nil {
+		return nil, err
+	}
+	if existing != 0 {
+		if existing != id {
+			return nil, fmt.Errorf("%w: измерение уже привязано к другому рейсу", ErrConflict)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return nil, fmt.Errorf("commit idempotent close: %w", err)
+		}
+		return r.Get(ctx, id)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE weighing
+		SET second_weight = $2,
+		    date_time_second_weight = $3,
+		    flag_weight = true,
+		    id_second_weight_user = 1,
+		    modified_by_user_id = 1,
+		    modified_date = now()
+		WHERE id = $1`,
+		id, measurement.WeightKg, measurement.MeasuredAt,
+	); err != nil {
+		return nil, fmt.Errorf("update weighing: %w", err)
+	}
+
+	if err := insertMeasurement(ctx, tx, id, 2, measurement); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit close session: %w", err)
+	}
+
+	return r.Get(ctx, id)
+}
+
+func (r *SessionRepository) List(ctx context.Context, status string, page, pageSize int) (*dto.SessionListResponse, error) {
+	where := sessionWhere(status)
+
+	var total int
+	if err := r.pool.QueryRow(ctx, "SELECT count(*) "+sessionFrom+" "+where).Scan(&total); err != nil {
+		return nil, fmt.Errorf("count sessions: %w", err)
+	}
+
+	query := sessionSelect + " " + where +
+		" ORDER BY w.created_date DESC LIMIT $1 OFFSET $2"
+
+	rows, err := r.pool.Query(ctx, query, pageSize, (page-1)*pageSize)
+	if err != nil {
+		return nil, fmt.Errorf("list sessions: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]dto.SessionDTO, 0, pageSize)
+	for rows.Next() {
+		item, err := scanSession(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, *item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate sessions: %w", err)
+	}
+
+	return &dto.SessionListResponse{
+		Items:    items,
+		Page:     page,
+		PageSize: pageSize,
+		Total:    total,
+	}, nil
+}
+
+func (r *SessionRepository) Get(ctx context.Context, id int64) (*dto.SessionDTO, error) {
+	row := r.pool.QueryRow(ctx, sessionSelect+" WHERE w.id = $1", id)
+	item, err := scanSession(row)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return item, nil
+}
+
+func (r *SessionRepository) Cancel(ctx context.Context, id int64) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin cancel session: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var infoID int64
+	err = tx.QueryRow(ctx, `
+		UPDATE weighing
+		SET deleted = true, modified_by_user_id = 1, modified_date = now()
+		WHERE id = $1 AND flag_weight = false AND deleted = false
+		RETURNING id_weighting_info`, id,
+	).Scan(&infoID)
+
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("cancel weighing: %w", err)
+		}
+
+		var flagWeight, deleted bool
+		if err := tx.QueryRow(ctx,
+			`SELECT flag_weight, deleted FROM weighing WHERE id = $1`, id,
+		).Scan(&flagWeight, &deleted); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrNotFound
+			}
+			return err
+		}
+
+		if deleted {
+			return fmt.Errorf("%w: взвешивание уже отменено", ErrConflict)
+		}
+		return fmt.Errorf("%w: завершённое взвешивание нельзя отменить", ErrConflict)
+	}
+
+	if _, err := tx.Exec(ctx,
+		`UPDATE weighing_info SET deleted = true WHERE id = $1`, infoID,
+	); err != nil {
+		return fmt.Errorf("cancel weighing_info: %w", err)
+	}
+
+	return tx.Commit(ctx)
+}
+
+func (r *SessionRepository) findByOperation(ctx context.Context, operationID string) (int64, error) {
+	var id int64
+	err := r.pool.QueryRow(ctx,
+		`SELECT id_weighing FROM weighing_measurement WHERE operation_id = $1`, operationID,
+	).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("find measurement: %w", err)
+	}
+	return id, nil
+}
+
+func findByOperationTx(ctx context.Context, tx pgx.Tx, operationID string) (int64, error) {
+	var id int64
+	err := tx.QueryRow(ctx,
+		`SELECT id_weighing FROM weighing_measurement WHERE operation_id = $1`, operationID,
+	).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("find measurement: %w", err)
+	}
+	return id, nil
+}
+
+func insertMeasurement(
+	ctx context.Context,
+	tx pgx.Tx,
+	weighingID int64,
+	kind int,
+	measurement dto.MeasurementDTO,
+) error {
+	_, err := tx.Exec(ctx, `
+		INSERT INTO weighing_measurement
+			(id_weighing, kind, operation_id, weight_kg, stable, terminal, platform, measured_at, checksum)
+		VALUES ($1, $2, $3, $4, true, $5, $6, $7, $8)`,
+		weighingID,
+		kind,
+		measurement.OperationID,
+		measurement.WeightKg,
+		measurement.Terminal,
+		measurement.Platform,
+		measurement.MeasuredAt,
+		measurement.Checksum,
+	)
+
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return fmt.Errorf("%w: измерение уже сохранено", ErrConflict)
+		}
+		return fmt.Errorf("insert measurement: %w", err)
+	}
+
+	return nil
+}
+
+func findOrCreateNamed(ctx context.Context, tx pgx.Tx, table, name string) (int64, error) {
+	var id int64
+	selectQuery := fmt.Sprintf(
+		`SELECT id FROM %s WHERE lower(name) = lower($1) AND deleted_at IS NULL LIMIT 1`,
+		table,
+	)
+
+	err := tx.QueryRow(ctx, selectQuery, strings.TrimSpace(name)).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return 0, fmt.Errorf("find %s: %w", table, err)
+	}
+
+	insertQuery := fmt.Sprintf(`INSERT INTO %s (name) VALUES ($1) RETURNING id`, table)
+	if err := tx.QueryRow(ctx, insertQuery, strings.TrimSpace(name)).Scan(&id); err != nil {
+		return 0, fmt.Errorf("insert %s: %w", table, err)
+	}
+
+	return id, nil
+}
+
+func sessionWhere(status string) string {
+	switch status {
+	case "open":
+		return "WHERE w.flag_weight = false AND w.deleted = false"
+	case "closed":
+		return "WHERE w.flag_weight = true AND w.deleted = false"
+	case "cancelled":
+		return "WHERE w.deleted = true"
+	default:
+		return "WHERE 1 = 1"
+	}
+}
+
+type scanner interface {
+	Scan(dest ...any) error
+}
+
+func scanSession(row scanner) (*dto.SessionDTO, error) {
+	var item dto.SessionDTO
+	var secondWeight sql.NullFloat64
+	var secondAt sql.NullTime
+	var flagWeight, deleted bool
+
+	if err := row.Scan(
+		&item.ID,
+		&item.TransportNumber,
+		&item.TrailerNumber,
+		&item.DriverName,
+		&item.FirstWeightKg,
+		&secondWeight,
+		&item.FirstMeasuredAt,
+		&secondAt,
+		&flagWeight,
+		&deleted,
+		&item.CreatedAt,
+	); err != nil {
+		return nil, err
+	}
+
+	if secondWeight.Valid {
+		value := secondWeight.Float64
+		item.SecondWeightKg = &value
+		net := math.Abs(item.FirstWeightKg - value)
+		item.NetWeightKg = &net
+	}
+	if secondAt.Valid {
+		value := secondAt.Time
+		item.SecondMeasuredAt = &value
+	}
+
+	switch {
+	case deleted:
+		item.Status = "cancelled"
+	case flagWeight:
+		item.Status = "closed"
+	default:
+		item.Status = "open"
+	}
+
+	return &item, nil
+}

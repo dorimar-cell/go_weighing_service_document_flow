@@ -13,6 +13,7 @@ import (
 
 type Handlers struct {
 	Dictionary *handler.DictionaryHandler
+	Session    *handler.SessionHandler
 }
 
 func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *chi.Mux {
@@ -37,6 +38,12 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 		r.Patch("/dictionaries/{code}/{id}", handlers.Dictionary.Update)
 		r.Delete("/dictionaries/{code}/{id}", handlers.Dictionary.Delete)
 		r.Post("/dictionaries/{code}/{id}/restore", handlers.Dictionary.Restore)
+
+		r.Post("/sessions", handlers.Session.Create)
+		r.Get("/sessions", handlers.Session.List)
+		r.Get("/sessions/{id}", handlers.Session.Get)
+		r.Post("/sessions/{id}/second", handlers.Session.Close)
+		r.Post("/sessions/{id}/cancel", handlers.Session.Cancel)
 	})
 
 	return router

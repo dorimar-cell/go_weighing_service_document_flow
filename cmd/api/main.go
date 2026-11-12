@@ -49,8 +49,16 @@ func main() {
 	dictionaryService := service.NewDictionaryService(dictionaryRepo)
 	dictionaryHandler := handler.NewDictionaryHandler(dictionaryService)
 
+	measurementVerifier := service.NewMeasurementVerifier(cfg)
+	sessionRepo := repository.NewSessionRepository(pool)
+	sessionService := service.NewSessionService(sessionRepo, measurementVerifier)
+	sessionHandler := handler.NewSessionHandler(sessionService)
+
 	router := app.NewRouter(
-		app.Handlers{Dictionary: dictionaryHandler},
+		app.Handlers{
+			Dictionary: dictionaryHandler,
+			Session:    sessionHandler,
+		},
 		auth,
 		cfg.CORSOrigins,
 	)
