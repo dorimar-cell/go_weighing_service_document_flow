@@ -54,11 +54,16 @@ func TalonVariantValid(code string) bool {
 }
 
 func renderTalon(details *dto.SessionDetails, settings dto.ReportSettings) []byte {
-	return renderTalonVariant(details, settings, "base")
+	return renderTalonVariant(details, settings, "base", false)
 }
 
 // renderTalonVariant собирает отвесной талон в выбранном варианте.
-func renderTalonVariant(details *dto.SessionDetails, settings dto.ReportSettings, variant string) []byte {
+func renderTalonVariant(
+	details *dto.SessionDetails,
+	settings dto.ReportSettings,
+	variant string,
+	withBarcode bool,
+) []byte {
 	meta, ok := talonVariants[variant]
 	if !ok {
 		meta = talonVariants["base"]
@@ -66,12 +71,17 @@ func renderTalonVariant(details *dto.SessionDetails, settings dto.ReportSettings
 	return wrapHTML(
 		meta.Title+" №"+int64Text(details.Session.ID),
 		false,
-		talonVariantBody(details, settings, variant),
+		talonVariantBody(details, settings, variant, withBarcode),
 	)
 }
 
 // talonVariantBody — тело талона без HTML-обёртки.
-func talonVariantBody(details *dto.SessionDetails, settings dto.ReportSettings, variant string) string {
+func talonVariantBody(
+	details *dto.SessionDetails,
+	settings dto.ReportSettings,
+	variant string,
+	withBarcode bool,
+) string {
 	meta, ok := talonVariants[variant]
 	if !ok {
 		meta = talonVariants["base"]
@@ -94,6 +104,13 @@ func talonVariantBody(details *dto.SessionDetails, settings dto.ReportSettings, 
 	body.WriteString("<h1>" + esc(meta.Title) + "</h1>")
 	body.WriteString("<p class=\"subtitle\">" + esc(meta.Subtitle) + " · № " +
 		esc(int64Text(session.ID)) + " от " + esc(documentDate(session)) + "</p>")
+
+	if withBarcode {
+		code := "R" + int64Text(session.ID)
+		body.WriteString("<div class=\"barcode\">" + BarcodeSVG(code, 2, 56) +
+			"<div class=\"barcode-caption\">Рейс №" + esc(int64Text(session.ID)) +
+			" · ТС " + esc(orDash(session.TransportNumber)) + "</div></div>")
+	}
 
 	rows := [][2]string{
 		{"Транспортное средство", esc(session.TransportNumber)},

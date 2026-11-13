@@ -363,7 +363,7 @@ func (r *DocumentRepository) SaveTTN(
 		).Scan(&id); err != nil {
 			return nil, fmt.Errorf("insert ttn document: %w", err)
 		}
-		return r.savedTTN(ctx, doc.SessionID, userID)
+		return r.finishTTN(ctx, doc.SessionID, userID, existing)
 	}
 
 	if _, err := r.pool.Exec(ctx, `
@@ -392,7 +392,23 @@ func (r *DocumentRepository) SaveTTN(
 		return nil, fmt.Errorf("update ttn document: %w", err)
 	}
 
-	return r.savedTTN(ctx, doc.SessionID, userID)
+	return r.finishTTN(ctx, doc.SessionID, userID, existing)
+}
+
+func (r *DocumentRepository) finishTTN(
+	ctx context.Context,
+	sessionID int64,
+	userID int64,
+	before *dto.TTNDocument,
+) (*dto.TTNDocument, error) {
+	saved, err := r.TTN(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.auditDocument(ctx, sessionID, "ttn", userID, before, saved); err != nil {
+		return nil, err
+	}
+	return saved, nil
 }
 
 const torg12Select = `
@@ -503,7 +519,7 @@ func (r *DocumentRepository) SaveTorg12(
 		).Scan(&id); err != nil {
 			return nil, fmt.Errorf("insert torg12 document: %w", err)
 		}
-		return r.savedTorg12(ctx, doc.SessionID, userID)
+		return r.finishTorg12(ctx, doc.SessionID, userID, existing)
 	}
 
 	if _, err := r.pool.Exec(ctx, `
@@ -526,7 +542,23 @@ func (r *DocumentRepository) SaveTorg12(
 		return nil, fmt.Errorf("update torg12 document: %w", err)
 	}
 
-	return r.savedTorg12(ctx, doc.SessionID, userID)
+	return r.finishTorg12(ctx, doc.SessionID, userID, existing)
+}
+
+func (r *DocumentRepository) finishTorg12(
+	ctx context.Context,
+	sessionID int64,
+	userID int64,
+	before *dto.Torg12Document,
+) (*dto.Torg12Document, error) {
+	saved, err := r.Torg12(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.auditDocument(ctx, sessionID, "torg12", userID, before, saved); err != nil {
+		return nil, err
+	}
+	return saved, nil
 }
 
 const invoiceSelect = `
@@ -602,7 +634,7 @@ func (r *DocumentRepository) SaveInvoice(
 		).Scan(&id); err != nil {
 			return nil, fmt.Errorf("insert invoice document: %w", err)
 		}
-		return r.savedInvoice(ctx, doc.SessionID, userID)
+		return r.finishInvoice(ctx, doc.SessionID, userID, existing)
 	}
 
 	if _, err := r.pool.Exec(ctx, `
@@ -618,7 +650,23 @@ func (r *DocumentRepository) SaveInvoice(
 		return nil, fmt.Errorf("update invoice document: %w", err)
 	}
 
-	return r.savedInvoice(ctx, doc.SessionID, userID)
+	return r.finishInvoice(ctx, doc.SessionID, userID, existing)
+}
+
+func (r *DocumentRepository) finishInvoice(
+	ctx context.Context,
+	sessionID int64,
+	userID int64,
+	before *dto.InvoiceDocument,
+) (*dto.InvoiceDocument, error) {
+	saved, err := r.Invoice(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.auditDocument(ctx, sessionID, "invoice", userID, before, saved); err != nil {
+		return nil, err
+	}
+	return saved, nil
 }
 
 func ptrFloat(value float64) *float64 {
@@ -629,50 +677,17 @@ func floatText(value float64) string {
 	return strconv.FormatFloat(value, 'f', -1, 64)
 }
 
-// savedTTN сохраняет факт изменения ТТН и возвращает актуальные реквизиты.
-func (r *DocumentRepository) savedTTN(
-	ctx context.Context,
-	sessionID int64,
-	userID int64,
-) (*dto.TTNDocument, error) {
-	if err := r.auditDocument(ctx, sessionID, "ttn", userID); err != nil {
-		return nil, err
-	}
-	return r.TTN(ctx, sessionID)
-}
-
-// savedTorg12 сохраняет факт изменения ТОРГ-12.
-func (r *DocumentRepository) savedTorg12(
-	ctx context.Context,
-	sessionID int64,
-	userID int64,
-) (*dto.Torg12Document, error) {
-	if err := r.auditDocument(ctx, sessionID, "torg12", userID); err != nil {
-		return nil, err
-	}
-	return r.Torg12(ctx, sessionID)
-}
-
-// savedInvoice сохраняет факт изменения счёта-фактуры.
-func (r *DocumentRepository) savedInvoice(
-	ctx context.Context,
-	sessionID int64,
-	userID int64,
-) (*dto.InvoiceDocument, error) {
-	if err := r.auditDocument(ctx, sessionID, "invoice", userID); err != nil {
-		return nil, err
-	}
-	return r.Invoice(ctx, sessionID)
-}
-
-// auditDocument пишет в историю рейса факт сохранения печатного документа.
+// auditDocument пишет в историю рейса diff реквизитов печатного документа.
 func (r *DocumentRepository) auditDocument(
 	ctx context.Context,
 	sessionID int64,
 	kind string,
 	userID int64,
+	before any,
+	after any,
 ) error {
-	payload, err := json.Marshal(map[string]any{"kind": kind})
+	changes := documentChanges(before, after)
+	payload, err := json.Marshal(map[string]any{"kind": kind, "changes": changes})
 	if err != nil {
 		return fmt.Errorf("marshal document audit: %w", err)
 	}
@@ -686,4 +701,60 @@ func (r *DocumentRepository) auditDocument(
 	}
 
 	return nil
+}
+
+// documentChanges сравнивает реквизиты «было → стало» по JSON-полям.
+// Служебные поля (id, признак сохранения, дата изменения) в diff не попадают.
+func documentChanges(before any, after any) map[string]map[string]any {
+	beforeValues := documentValues(before)
+	afterValues := documentValues(after)
+
+	changes := make(map[string]map[string]any)
+	for field, newValue := range afterValues {
+		if _, skip := documentAuditSkip[field]; skip {
+			continue
+		}
+		oldValue, existed := beforeValues[field]
+		if existed && fmt.Sprint(oldValue) == fmt.Sprint(newValue) {
+			continue
+		}
+		if !existed && isEmptyDocumentValue(newValue) {
+			continue
+		}
+		changes[field] = map[string]any{"old": oldValue, "new": newValue}
+	}
+	return changes
+}
+
+var documentAuditSkip = map[string]struct{}{
+	"id": {}, "sessionId": {}, "saved": {}, "updatedAt": {},
+}
+
+func documentValues(document any) map[string]any {
+	result := make(map[string]any)
+	if document == nil {
+		return result
+	}
+	raw, err := json.Marshal(document)
+	if err != nil {
+		return result
+	}
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return result
+	}
+	return result
+}
+
+func isEmptyDocumentValue(value any) bool {
+	switch typed := value.(type) {
+	case nil:
+		return true
+	case string:
+		return typed == ""
+	case float64:
+		return typed == 0
+	case bool:
+		return !typed
+	}
+	return false
 }

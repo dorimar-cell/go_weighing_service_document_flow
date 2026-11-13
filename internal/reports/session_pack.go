@@ -35,7 +35,7 @@ func renderSessionPack(pack SessionPack, settings dto.ReportSettings) []byte {
 
 	sections := []string{
 		tscardBody(details, settings, pack.Photos),
-		talonVariantBody(details, settings, "base"),
+		talonVariantBody(details, settings, "base", false),
 		cargoActBody(details, settings),
 		uploadingBody(details, settings),
 		ttnBody(details, pack.TTN, settings),

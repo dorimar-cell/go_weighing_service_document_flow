@@ -45,8 +45,9 @@ func RenderTalonVariant(
 	details *dto.SessionDetails,
 	settings dto.ReportSettings,
 	variant string,
+	withBarcode bool,
 ) []byte {
-	return renderTalonVariant(details, settings, variant)
+	return renderTalonVariant(details, settings, variant, withBarcode)
 }
 
 // RenderTalonsBatch собирает пакет талонов за период.

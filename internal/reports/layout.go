@@ -55,6 +55,8 @@ body { margin: 0; padding: 0; color: #000; background: #fff;
 h1 { margin: 0 0 2mm; font-size: 15pt; text-align: center; text-transform: uppercase; letter-spacing: .04em; }
 h2 { margin: 4mm 0 2mm; font-size: 11pt; }
 .subtitle { margin: 0 0 3mm; text-align: center; font-size: 10pt; }
+.barcode { display: flex; flex-direction: column; align-items: center; gap: 1mm; margin: 0 0 3mm; }
+.barcode-caption { font-size: 8pt; color: #333; }
 .meta { margin: 0 0 3mm; font-size: 9pt; line-height: 1.5; }
 .meta span { margin-right: 6mm; }
 table { width: 100%; border-collapse: collapse; }

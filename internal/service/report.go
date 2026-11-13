@@ -696,10 +696,11 @@ func (s *ReportService) runDocument(
 		if !reports.TalonVariantValid(variant) {
 			return nil, &ValidationError{Message: "Неизвестный вариант талона: " + variant}
 		}
+		withBarcode := query.Get("barcode") == "1" || query.Get("barcode") == "true"
 		return &ReportFile{
 			Name:        fmt.Sprintf("talon-%s-%d-%s.html", variant, sessionID, stamp),
 			ContentType: "text/html; charset=utf-8",
-			Data:        reports.RenderTalonVariant(details, settings, variant),
+			Data:        reports.RenderTalonVariant(details, settings, variant, withBarcode),
 		}, nil
 	case "cargo-act":
 		return &ReportFile{
