@@ -45,6 +45,7 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 		r.Post("/sessions/flow", handlers.Session.Flow)
 		r.Get("/sessions", handlers.Session.List)
 		r.Get("/sessions/export", handlers.Session.Export)
+		r.Get("/sessions/export.xlsx", handlers.Session.ExportXLSX)
 		r.Get("/sessions/{id}", handlers.Session.Get)
 		r.Get("/sessions/{id}/measurements", handlers.Session.Measurements)
 		r.Post("/sessions/{id}/second", handlers.Session.Close)

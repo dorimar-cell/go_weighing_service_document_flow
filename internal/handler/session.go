@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/xuri/excelize/v2"
 
 	"go_weighing_service/internal/dto"
 	"go_weighing_service/internal/repository"
@@ -216,6 +217,147 @@ func (h *SessionHandler) Export(w http.ResponseWriter, r *http.Request) {
 	if err := writer.Error(); err != nil {
 		slog.Error("export csv", "error", err)
 	}
+}
+
+// ExportXLSX: GET /spa/api/weighing/sessions/export.xlsx?status=&search=&dateFrom=&dateTo=
+func (h *SessionHandler) ExportXLSX(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permExport) {
+		return
+	}
+
+	dateFrom, err := parseDateParam(r.URL.Query().Get("dateFrom"), false)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_date", err.Error())
+		return
+	}
+	dateTo, err := parseDateParam(r.URL.Query().Get("dateTo"), true)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_date", err.Error())
+		return
+	}
+
+	items, err := h.service.Export(
+		r.Context(),
+		r.URL.Query().Get("status"),
+		r.URL.Query().Get("search"),
+		dateFrom,
+		dateTo,
+	)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	file := excelize.NewFile()
+	defer func() { _ = file.Close() }()
+
+	sheet := "Журнал"
+	if _, err := file.NewSheet(sheet); err != nil {
+		h.handleError(w, err)
+		return
+	}
+	_ = file.DeleteSheet("Sheet1")
+
+	headers := []string{
+		"№", "Статус", "Транспорт", "Прицеп", "Водитель", "Пропуск",
+		"Груз", "Контрагент", "Перевозчик", "Склад", "Тип операции",
+		"Брутто, т", "Тара, т", "Нетто, т",
+		"Первое взвешивание", "Второе взвешивание", "Создан",
+	}
+
+	headerStyle, _ := file.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true},
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#E8EEF7"}, Pattern: 1},
+		Alignment: &excelize.Alignment{
+			Horizontal: "center",
+			Vertical:   "center",
+			WrapText:   true,
+		},
+	})
+
+	weightFormat := "#,##0.000"
+	weightStyle, _ := file.NewStyle(&excelize.Style{
+		CustomNumFmt: &weightFormat,
+	})
+
+	for index, header := range headers {
+		cell, _ := excelize.CoordinatesToCellName(index+1, 1)
+		_ = file.SetCellValue(sheet, cell, header)
+	}
+	lastHeaderCell, _ := excelize.CoordinatesToCellName(len(headers), 1)
+	_ = file.SetCellStyle(sheet, "A1", lastHeaderCell, headerStyle)
+
+	for index, item := range items {
+		row := index + 2
+		values := []any{
+			item.ID,
+			statusLabel(item.Status),
+			item.TransportNumber,
+			item.TrailerNumber,
+			item.DriverName,
+			item.PassNumber,
+			item.CargoName,
+			item.CounterpartyName,
+			item.CarrierName,
+			item.StorageName,
+			item.OperationTypeName,
+			weightValue(item.FirstWeightKg),
+			weightValuePtr(item.SecondWeightKg),
+			weightValuePtr(item.NetWeightKg),
+			item.FirstMeasuredAt.Format("02.01.2006 15:04"),
+			formatCSVTime(item.SecondMeasuredAt),
+			item.CreatedAt.Format("02.01.2006 15:04"),
+		}
+
+		for column, value := range values {
+			cell, _ := excelize.CoordinatesToCellName(column+1, row)
+			if value != nil {
+				_ = file.SetCellValue(sheet, cell, value)
+			}
+		}
+
+		for column := 12; column <= 14; column++ {
+			cell, _ := excelize.CoordinatesToCellName(column, row)
+			_ = file.SetCellStyle(sheet, cell, cell, weightStyle)
+		}
+	}
+
+	widths := map[string]float64{
+		"A": 6, "B": 12, "C": 16, "D": 14, "E": 22, "F": 16,
+		"G": 22, "H": 24, "I": 20, "J": 20, "K": 16,
+		"L": 12, "M": 12, "N": 12, "O": 18, "P": 18, "Q": 18,
+	}
+	for column, width := range widths {
+		_ = file.SetColWidth(sheet, column, column, width)
+	}
+
+	_ = file.SetPanes(sheet, &excelize.Panes{
+		Freeze:      true,
+		YSplit:      1,
+		TopLeftCell: "A2",
+		ActivePane:  "bottomLeft",
+	})
+
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(
+		`attachment; filename="weighing-journal-%s.xlsx"`,
+		time.Now().Format("20060102-150405"),
+	))
+
+	if err := file.Write(w); err != nil {
+		slog.Error("export xlsx", "error", err)
+	}
+}
+
+func weightValue(value float64) any {
+	return value
+}
+
+func weightValuePtr(value *float64) any {
+	if value == nil {
+		return nil
+	}
+	return *value
 }
 
 func statusLabel(status string) string {
