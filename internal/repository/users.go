@@ -25,6 +25,7 @@ func NewUsersRepository(pool *pgxpool.Pool) *UsersRepository {
 func (r *UsersRepository) List(
 	ctx context.Context,
 	search string,
+	groupID *int64,
 	page int,
 	pageSize int,
 ) (*dto.UsersResponse, error) {
@@ -37,6 +38,10 @@ func (r *UsersRepository) List(
 			"(lower(u.name) LIKE lower($%d) OR lower(COALESCE(u.portal_username, '')) LIKE lower($%d))",
 			len(args), len(args),
 		))
+	}
+	if groupID != nil {
+		args = append(args, *groupID)
+		where = append(where, fmt.Sprintf("u.id_dir_user_groups = $%d", len(args)))
 	}
 	whereSQL := " WHERE " + strings.Join(where, " AND ")
 
@@ -139,6 +144,52 @@ func (r *UsersRepository) UpdateUser(
 	return nil
 }
 
+// FavoriteReports возвращает коды избранных отчётов.
+func (r *UsersRepository) FavoriteReports(ctx context.Context, userID int64) ([]string, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT code FROM user_report_favorites WHERE user_id = $1 ORDER BY code`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list favorite reports: %w", err)
+	}
+	defer rows.Close()
+
+	codes := make([]string, 0, 8)
+	for rows.Next() {
+		var code string
+		if err := rows.Scan(&code); err != nil {
+			return nil, fmt.Errorf("scan favorite report: %w", err)
+		}
+		codes = append(codes, code)
+	}
+	return codes, rows.Err()
+}
+
+// SetFavoriteReport добавляет или убирает отчёт из избранного.
+func (r *UsersRepository) SetFavoriteReport(
+	ctx context.Context,
+	userID int64,
+	code string,
+	favorite bool,
+) error {
+	if favorite {
+		_, err := r.pool.Exec(ctx, `
+			INSERT INTO user_report_favorites (user_id, code)
+			VALUES ($1, $2)
+			ON CONFLICT (user_id, code) DO NOTHING`, userID, code)
+		if err != nil {
+			return fmt.Errorf("add favorite report: %w", err)
+		}
+		return nil
+	}
+
+	if _, err := r.pool.Exec(ctx,
+		`DELETE FROM user_report_favorites WHERE user_id = $1 AND code = $2`, userID, code,
+	); err != nil {
+		return fmt.Errorf("remove favorite report: %w", err)
+	}
+	return nil
+}
+
 // JournalPreferences возвращает сохранённые фильтры и колонки пользователя.
 func (r *UsersRepository) JournalPreferences(
 	ctx context.Context,
@@ -146,15 +197,18 @@ func (r *UsersRepository) JournalPreferences(
 ) (*dto.JournalPreferences, error) {
 	var filters []byte
 	var columns []byte
+	var presets []byte
 	var updatedAt *string
 
 	err := r.pool.QueryRow(ctx, `
-		SELECT filters, columns, to_char(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS')
+		SELECT filters, columns, presets, to_char(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS')
 		FROM user_journal_preferences
 		WHERE user_id = $1`, userID,
-	).Scan(&filters, &columns, &updatedAt)
+	).Scan(&filters, &columns, &presets, &updatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return &dto.JournalPreferences{Filters: map[string]any{}, Columns: []string{}}, nil
+		return &dto.JournalPreferences{
+			Filters: map[string]any{}, Columns: []string{}, Presets: []dto.JournalFilterPreset{},
+		}, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("load journal preferences: %w", err)
@@ -163,12 +217,16 @@ func (r *UsersRepository) JournalPreferences(
 	prefs := &dto.JournalPreferences{}
 	_ = json.Unmarshal(filters, &prefs.Filters)
 	_ = json.Unmarshal(columns, &prefs.Columns)
+	_ = json.Unmarshal(presets, &prefs.Presets)
 	prefs.UpdatedAt = updatedAt
 	if prefs.Filters == nil {
 		prefs.Filters = map[string]any{}
 	}
 	if prefs.Columns == nil {
 		prefs.Columns = []string{}
+	}
+	if prefs.Presets == nil {
+		prefs.Presets = []dto.JournalFilterPreset{}
 	}
 	return prefs, nil
 }
@@ -187,15 +245,20 @@ func (r *UsersRepository) SaveJournalPreferences(
 	if err != nil {
 		return fmt.Errorf("marshal columns: %w", err)
 	}
+	presets, err := json.Marshal(prefs.Presets)
+	if err != nil {
+		return fmt.Errorf("marshal presets: %w", err)
+	}
 
 	_, err = r.pool.Exec(ctx, `
-		INSERT INTO user_journal_preferences (user_id, filters, columns, updated_at)
-		VALUES ($1, $2::jsonb, $3::jsonb, now())
+		INSERT INTO user_journal_preferences (user_id, filters, columns, presets, updated_at)
+		VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb, now())
 		ON CONFLICT (user_id) DO UPDATE SET
 			filters = EXCLUDED.filters,
 			columns = EXCLUDED.columns,
+			presets = EXCLUDED.presets,
 			updated_at = now()`,
-		userID, string(filters), string(columns),
+		userID, string(filters), string(columns), string(presets),
 	)
 	if err != nil {
 		return fmt.Errorf("save journal preferences: %w", err)

@@ -134,6 +134,9 @@ func (h *SessionHandler) List(w http.ResponseWriter, r *http.Request) {
 		dateTo,
 		optionalQueryID(r, "operationTypeId"),
 		optionalQueryID(r, "cargoId"),
+		optionalQueryID(r, "driverId"),
+		optionalQueryID(r, "counterpartyId"),
+		optionalQueryID(r, "carrierId"),
 		r.URL.Query().Get("sort"),
 		r.URL.Query().Get("dir"),
 		page,
@@ -196,6 +199,9 @@ func (h *SessionHandler) Export(w http.ResponseWriter, r *http.Request) {
 		dateTo,
 		optionalQueryID(r, "operationTypeId"),
 		optionalQueryID(r, "cargoId"),
+		optionalQueryID(r, "driverId"),
+		optionalQueryID(r, "counterpartyId"),
+		optionalQueryID(r, "carrierId"),
 	)
 	if err != nil {
 		h.handleError(w, err)
@@ -272,6 +278,9 @@ func (h *SessionHandler) ExportXLSX(w http.ResponseWriter, r *http.Request) {
 		dateTo,
 		optionalQueryID(r, "operationTypeId"),
 		optionalQueryID(r, "cargoId"),
+		optionalQueryID(r, "driverId"),
+		optionalQueryID(r, "counterpartyId"),
+		optionalQueryID(r, "carrierId"),
 	)
 	if err != nil {
 		h.handleError(w, err)

@@ -145,7 +145,7 @@ func (s *ReportService) runTalons(
 		return nil, err
 	}
 
-	items, err := s.sessions.Export(ctx, "closed", "", dateFrom, dateTo, nil, nil)
+	items, err := s.sessions.Export(ctx, "closed", "", dateFrom, dateTo, nil, nil, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +185,7 @@ func (s *ReportService) runFirstWeight(
 		return nil, err
 	}
 
-	items, err := s.sessions.Export(ctx, "open", "", dateFrom, dateTo, nil, nil)
+	items, err := s.sessions.Export(ctx, "open", "", dateFrom, dateTo, nil, nil, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -241,7 +241,7 @@ func (s *ReportService) runTransportJournal(
 	}
 
 	search := strings.TrimSpace(query.Get("search"))
-	items, err := s.sessions.Export(ctx, "closed", search, dateFrom, dateTo, nil, nil)
+	items, err := s.sessions.Export(ctx, "closed", search, dateFrom, dateTo, nil, nil, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -304,7 +304,7 @@ func (s *ReportService) runTTNBatch(
 		return nil, err
 	}
 
-	sessions, err := s.sessions.Export(ctx, "closed", "", dateFrom, dateTo, nil, nil)
+	sessions, err := s.sessions.Export(ctx, "closed", "", dateFrom, dateTo, nil, nil, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -366,7 +366,7 @@ func (s *ReportService) runTorg12Batch(
 		return nil, err
 	}
 
-	sessions, err := s.sessions.Export(ctx, "closed", "", dateFrom, dateTo, nil, nil)
+	sessions, err := s.sessions.Export(ctx, "closed", "", dateFrom, dateTo, nil, nil, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -428,7 +428,7 @@ func (s *ReportService) runInvoiceBatch(
 		return nil, err
 	}
 
-	sessions, err := s.sessions.Export(ctx, "closed", "", dateFrom, dateTo, nil, nil)
+	sessions, err := s.sessions.Export(ctx, "closed", "", dateFrom, dateTo, nil, nil, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -490,7 +490,7 @@ func (s *ReportService) runCargoActBatch(
 		return nil, err
 	}
 
-	sessions, err := s.sessions.Export(ctx, "closed", "", dateFrom, dateTo, nil, nil)
+	sessions, err := s.sessions.Export(ctx, "closed", "", dateFrom, dateTo, nil, nil, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -615,7 +615,7 @@ func (s *ReportService) runJournal(ctx context.Context, query url.Values, format
 		return nil, err
 	}
 
-	items, err := s.sessions.Export(ctx, status, strings.TrimSpace(query.Get("search")), dateFrom, dateTo, nil, nil)
+	items, err := s.sessions.Export(ctx, status, strings.TrimSpace(query.Get("search")), dateFrom, dateTo, nil, nil, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}

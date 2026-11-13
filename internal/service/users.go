@@ -19,11 +19,12 @@ func NewUsersService(repo *repository.UsersRepository) *UsersService {
 func (s *UsersService) List(
 	ctx context.Context,
 	search string,
+	groupID *int64,
 	page int,
 	pageSize int,
 ) (*dto.UsersResponse, error) {
 	page, pageSize = normalizePaging(page, pageSize)
-	return s.repo.List(ctx, search, page, pageSize)
+	return s.repo.List(ctx, search, groupID, page, pageSize)
 }
 
 func (s *UsersService) WeightRooms(ctx context.Context) ([]dto.WeightRoomDTO, error) {
@@ -49,6 +50,22 @@ func (s *UsersService) UpdateUser(
 		return &ValidationError{Message: "Системного пользователя нельзя менять"}
 	}
 	return s.repo.UpdateUser(ctx, userID, req)
+}
+
+func (s *UsersService) FavoriteReports(ctx context.Context, userID int64) ([]string, error) {
+	return s.repo.FavoriteReports(ctx, userID)
+}
+
+func (s *UsersService) SetFavoriteReport(
+	ctx context.Context,
+	userID int64,
+	code string,
+	favorite bool,
+) error {
+	if code == "" {
+		return &ValidationError{Message: "Не указан код отчёта"}
+	}
+	return s.repo.SetFavoriteReport(ctx, userID, code, favorite)
 }
 
 func (s *UsersService) JournalPreferences(

@@ -38,9 +38,16 @@ type UpdateUserRequest struct {
 
 // JournalPreferences — серверные настройки журнала пользователя.
 type JournalPreferences struct {
-	Filters   map[string]any `json:"filters"`
-	Columns   []string       `json:"columns"`
-	UpdatedAt *string        `json:"updatedAt,omitempty"`
+	Filters   map[string]any        `json:"filters"`
+	Columns   []string              `json:"columns"`
+	Presets   []JournalFilterPreset `json:"presets"`
+	UpdatedAt *string               `json:"updatedAt,omitempty"`
+}
+
+// JournalFilterPreset — именованный набор фильтров журнала.
+type JournalFilterPreset struct {
+	Name    string         `json:"name"`
+	Filters map[string]any `json:"filters"`
 }
 
 // BulkSessionRequest — массовая отмена/восстановление рейсов.

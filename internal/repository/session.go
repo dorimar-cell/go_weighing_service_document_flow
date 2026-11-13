@@ -361,12 +361,16 @@ func (r *SessionRepository) List(
 	dateTo *time.Time,
 	operationTypeID *int64,
 	cargoID *int64,
+	driverID *int64,
+	counterpartyID *int64,
+	carrierID *int64,
 	sortBy string,
 	direction string,
 	page int,
 	pageSize int,
 ) (*dto.SessionListResponse, error) {
-	where, args := buildSessionWhere(status, search, dateFrom, dateTo, operationTypeID, cargoID)
+	where, args := buildSessionWhere(status, search, dateFrom, dateTo,
+		operationTypeID, cargoID, driverID, counterpartyID, carrierID)
 
 	orderExpression := "w.created_date"
 	switch sortBy {
@@ -472,8 +476,12 @@ func (r *SessionRepository) Export(
 	dateTo *time.Time,
 	operationTypeID *int64,
 	cargoID *int64,
+	driverID *int64,
+	counterpartyID *int64,
+	carrierID *int64,
 ) ([]dto.SessionDTO, error) {
-	where, args := buildSessionWhere(status, search, dateFrom, dateTo, operationTypeID, cargoID)
+	where, args := buildSessionWhere(status, search, dateFrom, dateTo,
+		operationTypeID, cargoID, driverID, counterpartyID, carrierID)
 	query := sessionSelect + " " + where + " ORDER BY w.created_date DESC LIMIT 10000"
 
 	rows, err := r.pool.Query(ctx, query, args...)
@@ -686,9 +694,12 @@ func buildSessionWhere(
 	dateTo *time.Time,
 	operationTypeID *int64,
 	cargoID *int64,
+	driverID *int64,
+	counterpartyID *int64,
+	carrierID *int64,
 ) (string, []any) {
 	where := []string{"1 = 1"}
-	args := make([]any, 0, 5)
+	args := make([]any, 0, 8)
 
 	switch status {
 	case "open":
@@ -730,6 +741,21 @@ func buildSessionWhere(
 	if cargoID != nil {
 		args = append(args, *cargoID)
 		where = append(where, fmt.Sprintf("line.cargo_id = $%d", len(args)))
+	}
+
+	if driverID != nil {
+		args = append(args, *driverID)
+		where = append(where, fmt.Sprintf("d.id = $%d", len(args)))
+	}
+
+	if counterpartyID != nil {
+		args = append(args, *counterpartyID)
+		where = append(where, fmt.Sprintf("cp.id = $%d", len(args)))
+	}
+
+	if carrierID != nil {
+		args = append(args, *carrierID)
+		where = append(where, fmt.Sprintf("cr.id = $%d", len(args)))
 	}
 
 	return " WHERE " + strings.Join(where, " AND "), args

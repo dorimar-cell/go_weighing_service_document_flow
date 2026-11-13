@@ -42,6 +42,7 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 
 		r.Get("/dictionaries/{code}", handlers.Dictionary.List)
 		r.Get("/dictionaries/{code}/export.csv", handlers.Dictionary.Export)
+		r.Get("/dictionaries/{code}/template.csv", handlers.Dictionary.Template)
 		r.Post("/dictionaries/{code}/import.csv", handlers.Dictionary.Import)
 		r.Get("/dictionary-audit", handlers.Dictionary.AuditList)
 		r.Get("/dictionary-audit/export.csv", handlers.Dictionary.AuditExport)
@@ -87,6 +88,9 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 		r.Put("/users/{id}", handlers.Users.Update)
 		r.Get("/journal/preferences", handlers.Users.GetPreferences)
 		r.Put("/journal/preferences", handlers.Users.SavePreferences)
+
+		r.Get("/reports/favorites", handlers.Users.FavoriteReports)
+		r.Put("/reports/{code}/favorite", handlers.Users.SetFavorite)
 
 		r.Get("/stations", handlers.Station.List)
 		r.Put("/stations/{id}", handlers.Station.Save)

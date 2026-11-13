@@ -259,6 +259,34 @@ func (h *DictionaryHandler) AuditList(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+// Template: GET /spa/api/weighing/dictionaries/{code}/template.csv
+func (h *DictionaryHandler) Template(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permExport) {
+		return
+	}
+
+	code := chi.URLParam(r, "code")
+	export, err := h.service.Export(r.Context(), code, "")
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s-template.csv"`, code))
+	_, _ = w.Write([]byte{0xEF, 0xBB, 0xBF})
+
+	writer := csv.NewWriter(w)
+	writer.Comma = ';'
+	headers := make([]string, 0, len(export.Fields)+1)
+	headers = append(headers, "ID")
+	for _, field := range export.Fields {
+		headers = append(headers, registry.FieldLabel(field.Key))
+	}
+	_ = writer.Write(headers)
+	writer.Flush()
+}
+
 // Import: POST /spa/api/weighing/dictionaries/{code}/import.csv (multipart, поле file)
 func (h *DictionaryHandler) Import(w http.ResponseWriter, r *http.Request) {
 	if !requirePermission(w, r, permSettings) {
@@ -362,7 +390,7 @@ func (h *DictionaryHandler) Import(w http.ResponseWriter, r *http.Request) {
 	}
 
 	imported, updated, importErrors, err := h.service.ImportCSV(
-		r.Context(), code, rows, currentUserID(r),
+		r.Context(), code, rows, currentUserID(r), r.URL.Query().Get("dryRun") == "1",
 	)
 	if err != nil {
 		h.handleError(w, err)
@@ -370,6 +398,7 @@ func (h *DictionaryHandler) Import(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
+		"dryRun":   r.URL.Query().Get("dryRun") == "1",
 		"imported": imported,
 		"updated":  updated,
 		"skipped":  len(rows) - imported - updated,

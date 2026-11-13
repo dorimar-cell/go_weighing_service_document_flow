@@ -110,6 +110,7 @@ func (s *DictionaryService) ImportCSV(
 	code string,
 	rows []map[string]any,
 	userID int64,
+	dryRun bool,
 ) (int, int, []string, error) {
 	if len(rows) > 5000 {
 		return 0, 0, nil, &ValidationError{Message: "Слишком много строк для импорта (макс. 5000)"}
@@ -150,6 +151,23 @@ func (s *DictionaryService) ImportCSV(
 
 		action := "imported"
 		if recordID > 0 {
+			if dryRun {
+				if _, err := s.repo.Get(ctx, def, recordID); err != nil {
+					errorsList = append(errorsList, fmt.Sprintf("строка %d: запись id=%d не найдена", index+2, recordID))
+					continue
+				}
+				values, err := parsePayload(def, raw)
+				if err != nil {
+					errorsList = append(errorsList, fmt.Sprintf("строка %d: %v", index+2, err))
+					continue
+				}
+				if err := validateRequired(def, values); err != nil {
+					errorsList = append(errorsList, fmt.Sprintf("строка %d: %v", index+2, err))
+					continue
+				}
+				updated++
+				continue
+			}
 			if _, err := s.Update(ctx, code, recordID, raw); err != nil {
 				errorsList = append(errorsList, fmt.Sprintf("строка %d: %v", index+2, err))
 				continue
@@ -157,6 +175,19 @@ func (s *DictionaryService) ImportCSV(
 			updated++
 			action = "imported_updated"
 		} else {
+			if dryRun {
+				values, err := parsePayload(def, raw)
+				if err != nil {
+					errorsList = append(errorsList, fmt.Sprintf("строка %d: %v", index+2, err))
+					continue
+				}
+				if err := validateRequired(def, values); err != nil {
+					errorsList = append(errorsList, fmt.Sprintf("строка %d: %v", index+2, err))
+					continue
+				}
+				created++
+				continue
+			}
 			item, err := s.Create(ctx, code, raw)
 			if err != nil {
 				errorsList = append(errorsList, fmt.Sprintf("строка %d: %v", index+2, err))
@@ -375,6 +406,15 @@ func parseValue(field registry.Field, raw json.RawMessage) (any, error) {
 	default:
 		return nil, fmt.Errorf("неизвестный тип поля")
 	}
+}
+
+func validateRequired(def registry.Dictionary, values map[string]any) error {
+	for _, field := range def.Fields {
+		if field.Required && isEmpty(values[field.Key]) {
+			return &ValidationError{Message: fmt.Sprintf("Заполните поле «%s»", field.Key)}
+		}
+	}
+	return nil
 }
 
 func isEmpty(value any) bool {

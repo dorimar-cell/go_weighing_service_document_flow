@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+
 	"go_weighing_service/internal/dto"
 	"go_weighing_service/internal/repository"
 	"go_weighing_service/internal/service"
@@ -27,6 +29,7 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	result, err := h.service.List(
 		r.Context(),
 		r.URL.Query().Get("search"),
+		optionalQueryID(r, "groupId"),
 		parseQueryInt(r, "page", 1),
 		parseQueryInt(r, "pageSize", 25),
 	)
@@ -117,6 +120,39 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// FavoriteReports: GET /spa/api/weighing/reports/favorites
+func (h *UsersHandler) FavoriteReports(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permJournal) {
+		return
+	}
+	codes, err := h.service.FavoriteReports(r.Context(), currentUserID(r))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", "Не удалось загрузить избранное")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": codes})
+}
+
+// SetFavorite: PUT /spa/api/weighing/reports/{code}/favorite
+func (h *UsersHandler) SetFavorite(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permJournal) {
+		return
+	}
+	code := chi.URLParam(r, "code")
+	var payload struct {
+		Favorite bool `json:"favorite"`
+	}
+	if err := decodeJSON(w, r, &payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+		return
+	}
+	if err := h.service.SetFavoriteReport(r.Context(), currentUserID(r), code, payload.Favorite); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", "Не удалось сохранить избранное")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"code": code, "favorite": payload.Favorite})
 }
 
 // GetPreferences: GET /spa/api/weighing/journal/preferences

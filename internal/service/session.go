@@ -156,6 +156,9 @@ func (s *SessionService) List(
 	dateTo *time.Time,
 	operationTypeID *int64,
 	cargoID *int64,
+	driverID *int64,
+	counterpartyID *int64,
+	carrierID *int64,
 	sortBy string,
 	direction string,
 	page int,
@@ -173,7 +176,8 @@ func (s *SessionService) List(
 
 	page, pageSize = normalizePaging(page, pageSize)
 	return s.repo.List(ctx, status, strings.TrimSpace(search), dateFrom, dateTo,
-		operationTypeID, cargoID, sortBy, direction, page, pageSize)
+		operationTypeID, cargoID, driverID, counterpartyID, carrierID,
+		sortBy, direction, page, pageSize)
 }
 
 func (s *SessionService) Get(ctx context.Context, id int64) (*dto.SessionDTO, error) {
@@ -427,11 +431,15 @@ func (s *SessionService) Export(
 	dateTo *time.Time,
 	operationTypeID *int64,
 	cargoID *int64,
+	driverID *int64,
+	counterpartyID *int64,
+	carrierID *int64,
 ) ([]dto.SessionDTO, error) {
 	status = strings.ToLower(strings.TrimSpace(status))
 	if status == "" {
 		status = "all"
 	}
 
-	return s.repo.Export(ctx, status, strings.TrimSpace(search), dateFrom, dateTo, operationTypeID, cargoID)
+	return s.repo.Export(ctx, status, strings.TrimSpace(search), dateFrom, dateTo,
+		operationTypeID, cargoID, driverID, counterpartyID, carrierID)
 }
