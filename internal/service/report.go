@@ -175,7 +175,12 @@ func (s *ReportService) runAggregate(
 		return nil, err
 	}
 
-	items, err := s.sessions.Aggregate(ctx, meta.Dimension, dateFrom, dateTo)
+	items, err := s.sessions.Aggregate(ctx, meta.Dimension, dateFrom, dateTo, dto.AggregateFilter{
+		CargoIDs:        parseIDList(query.Get("cargoIds")),
+		CounterpartyIDs: parseIDList(query.Get("counterpartyIds")),
+		CarrierIDs:      parseIDList(query.Get("carrierIds")),
+		StorageIDs:      parseIDList(query.Get("storageIds")),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -642,6 +647,19 @@ func parseReportDate(value string, endOfDay bool) (*time.Time, error) {
 	}
 
 	return &parsed, nil
+}
+
+func parseIDList(value string) []int64 {
+	parts := strings.Split(value, ",")
+	result := make([]int64, 0, len(parts))
+	for _, part := range parts {
+		id, err := strconv.ParseInt(strings.TrimSpace(part), 10, 64)
+		if err != nil || id <= 0 {
+			continue
+		}
+		result = append(result, id)
+	}
+	return result
 }
 
 func parseSessionID(value string) (int64, error) {

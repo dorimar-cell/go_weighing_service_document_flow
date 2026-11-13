@@ -55,6 +55,14 @@ type AggregateRow struct {
 	NettoKg  float64 `json:"nettoKg"`
 }
 
+// AggregateFilter — мультивыбор справочников для агрегатных отчётов.
+type AggregateFilter struct {
+	CargoIDs        []int64
+	CounterpartyIDs []int64
+	CarrierIDs      []int64
+	StorageIDs      []int64
+}
+
 // SessionDetails — данные рейса, которых нет в журнальном DTO,
 // но которые нужны бланкам (ИНН, адреса, цена груза, водительское).
 type SessionDetails struct {

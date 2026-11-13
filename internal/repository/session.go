@@ -698,6 +698,7 @@ func (r *SessionRepository) Aggregate(
 	dimension string,
 	dateFrom *time.Time,
 	dateTo *time.Time,
+	filter dto.AggregateFilter,
 ) ([]dto.AggregateRow, error) {
 	spec, ok := aggregateSpecs[dimension]
 	if !ok {
@@ -705,7 +706,7 @@ func (r *SessionRepository) Aggregate(
 	}
 
 	where := []string{"w.flag_weight = true", "w.deleted = false"}
-	args := make([]any, 0, 2)
+	args := make([]any, 0, 6)
 
 	if dateFrom != nil {
 		args = append(args, *dateFrom)
@@ -714,6 +715,22 @@ func (r *SessionRepository) Aggregate(
 	if dateTo != nil {
 		args = append(args, *dateTo)
 		where = append(where, fmt.Sprintf("w.date_time_first_weight < $%d", len(args)))
+	}
+	if len(filter.CargoIDs) > 0 {
+		args = append(args, filter.CargoIDs)
+		where = append(where, fmt.Sprintf("line.cargo_id = ANY($%d)", len(args)))
+	}
+	if len(filter.CounterpartyIDs) > 0 {
+		args = append(args, filter.CounterpartyIDs)
+		where = append(where, fmt.Sprintf("cp.id = ANY($%d)", len(args)))
+	}
+	if len(filter.CarrierIDs) > 0 {
+		args = append(args, filter.CarrierIDs)
+		where = append(where, fmt.Sprintf("cr.id = ANY($%d)", len(args)))
+	}
+	if len(filter.StorageIDs) > 0 {
+		args = append(args, filter.StorageIDs)
+		where = append(where, fmt.Sprintf("line.storage_id = ANY($%d)", len(args)))
 	}
 
 	query := fmt.Sprintf(`
