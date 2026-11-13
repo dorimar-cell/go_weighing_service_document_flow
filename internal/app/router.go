@@ -16,6 +16,7 @@ type Handlers struct {
 	Session    *handler.SessionHandler
 	Pass       *handler.PassHandler
 	Photo      *handler.PhotoHandler
+	Report     *handler.ReportHandler
 }
 
 func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *chi.Mux {
@@ -53,6 +54,13 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 		r.Post("/sessions/{id}/photos", handlers.Photo.Upload)
 		r.Get("/sessions/{id}/photos", handlers.Photo.List)
 		r.Get("/sessions/{id}/photos/{photoId}/file", handlers.Photo.File)
+		r.Get("/sessions/{id}/documents/{kind}", handlers.Report.GetDocument)
+		r.Put("/sessions/{id}/documents/{kind}", handlers.Report.SaveDocument)
+
+		r.Get("/reports", handlers.Report.Catalog)
+		r.Get("/reports/settings", handlers.Report.GetSettings)
+		r.Put("/reports/settings", handlers.Report.SaveSettings)
+		r.Get("/reports/{code}/run", handlers.Report.Run)
 
 		r.Post("/passes", handlers.Pass.Create)
 		r.Get("/passes", handlers.Pass.List)

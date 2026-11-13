@@ -62,12 +62,17 @@ func main() {
 	photoService := service.NewPhotoService(photoRepo, cfg.PhotoDir)
 	photoHandler := handler.NewPhotoHandler(photoService)
 
+	documentRepo := repository.NewDocumentRepository(pool)
+	reportService := service.NewReportService(sessionRepo, documentRepo, photoRepo, cfg.PhotoDir)
+	reportHandler := handler.NewReportHandler(reportService)
+
 	router := app.NewRouter(
 		app.Handlers{
 			Dictionary: dictionaryHandler,
 			Session:    sessionHandler,
 			Pass:       passHandler,
 			Photo:      photoHandler,
+			Report:     reportHandler,
 		},
 		auth,
 		cfg.CORSOrigins,
