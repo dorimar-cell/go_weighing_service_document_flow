@@ -317,9 +317,191 @@ paths:
         '200': { description: Reports }
   /spa/api/weighing/reports/{code}/run:
     get:
-      summary: Run report (html|xlsx)
+      summary: Run report (html|xlsx); short-lived server cache, X-Report-Cache hit|miss
       parameters:
         - { in: path, name: code, required: true, schema: { type: string } }
         - { in: query, name: format, schema: { type: string, enum: [html, xlsx] } }
+        - { in: query, name: nocache, schema: { type: string, enum: ['1'] } }
       responses:
         '200': { description: File }
+  /spa/api/weighing/reports/{code}/jobs:
+    post:
+      summary: Enqueue asynchronous report job
+      parameters:
+        - { in: path, name: code, required: true, schema: { type: string } }
+      responses:
+        '202': { description: Job with pending status }
+  /spa/api/weighing/reports/jobs:
+    get:
+      summary: Latest report jobs
+      parameters:
+        - { in: query, name: limit, schema: { type: integer, default: 20 } }
+      responses:
+        '200': { description: Jobs }
+  /spa/api/weighing/reports/jobs/{id}:
+    get:
+      summary: Report job status
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Job }
+        '404': { description: Job not found }
+  /spa/api/weighing/reports/jobs/{id}/download:
+    get:
+      summary: Download completed report job
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: File }
+        '400': { description: Job is not done yet }
+  /spa/api/weighing/reports/settings:
+    get:
+      summary: Organization print details
+      responses:
+        '200': { description: Details }
+    put:
+      summary: Save organization print details (W006)
+      responses:
+        '200': { description: Details }
+  /spa/api/weighing/sessions/export:
+    get:
+      summary: Journal CSV
+      responses:
+        '200': { description: CSV }
+  /spa/api/weighing/sessions/export.xlsx:
+    get:
+      summary: Journal XLSX
+      responses:
+        '200': { description: XLSX }
+  /spa/api/weighing/audit/export.xlsx:
+    get:
+      summary: Audit journal XLSX
+      responses:
+        '200': { description: XLSX }
+  /spa/api/weighing/dictionary-audit/export.csv:
+    get:
+      summary: Dictionary audit CSV
+      responses:
+        '200': { description: CSV }
+  /spa/api/weighing/dictionary-audit/export.xlsx:
+    get:
+      summary: Dictionary audit XLSX
+      responses:
+        '200': { description: XLSX }
+  /spa/api/weighing/dictionaries/{code}/template.csv:
+    get:
+      summary: Dictionary import template
+      parameters:
+        - { in: path, name: code, required: true, schema: { type: string } }
+      responses:
+        '200': { description: CSV }
+  /spa/api/weighing/dictionaries/{code}/{id}/restore:
+    post:
+      summary: Restore soft-deleted dictionary record
+      parameters:
+        - { in: path, name: code, required: true, schema: { type: string } }
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Restored record }
+  /spa/api/weighing/sessions/{id}/documents/{kind}:
+    get:
+      summary: Print document details (ttn|torg12|invoice)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+        - { in: path, name: kind, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Document }
+    put:
+      summary: Save document details; audit stores field diff
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+        - { in: path, name: kind, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Document }
+  /spa/api/weighing/sessions/{id}/photos:
+    get:
+      summary: Session photos
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Photos }
+    post:
+      summary: Upload session photo
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '201': { description: Photo }
+  /spa/api/weighing/sessions/{id}/photos/{photoId}/file:
+    get:
+      summary: Photo JPEG/PNG
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+        - { in: path, name: photoId, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Image }
+  /spa/api/weighing/passes:
+    get:
+      summary: Pass registry
+      responses:
+        '200': { description: Passes }
+    post:
+      summary: Create pass (W007)
+      responses:
+        '201': { description: Pass }
+  /spa/api/weighing/passes/{id}:
+    get:
+      summary: Pass card
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Pass }
+  /spa/api/weighing/passes/{id}/enabled:
+    patch:
+      summary: Enable or disable pass (W007)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Pass }
+  /spa/api/weighing/settings/profiles:
+    get:
+      summary: Settings profiles for all sections (W009)
+      responses:
+        '200': { description: Profiles with draft/applied/version }
+  /spa/api/weighing/settings/profiles/{scope}:
+    get:
+      summary: Settings profile by scope (scoreboard|speech|skud|email|integration|c1|axle|kfkh)
+      parameters:
+        - { in: path, name: scope, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Profile; secrets are masked as *** }
+    put:
+      summary: Save settings draft (W009); secrets with *** are preserved
+      parameters:
+        - { in: path, name: scope, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Profile }
+  /spa/api/weighing/settings/profiles/{scope}/apply:
+    post:
+      summary: Apply draft, increment version and write settings audit
+      parameters:
+        - { in: path, name: scope, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Applied profile }
+  /spa/api/weighing/settings/agent-config:
+    get:
+      summary: Applied equipment settings for station agent (X-Agent-Token or W009)
+      responses:
+        '200': { description: Applied scopes with versions }
+        '401': { description: Agent token required }
+  /spa/api/weighing/login-audit:
+    get:
+      summary: Login audit (W009)
+      parameters:
+        - { in: query, name: result, schema: { type: string, enum: [success, failed] } }
+        - { in: query, name: search, schema: { type: string } }
+        - { in: query, name: dateFrom, schema: { type: string, format: date } }
+        - { in: query, name: dateTo, schema: { type: string, format: date } }
+        - { in: query, name: page, schema: { type: integer } }
+        - { in: query, name: pageSize, schema: { type: integer } }
+      responses:
+        '200': { description: Login audit page }
