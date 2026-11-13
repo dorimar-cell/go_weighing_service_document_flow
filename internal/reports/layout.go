@@ -77,6 +77,8 @@ tr { page-break-inside: avoid; }
 .photos img { width: 100%; height: auto; border: 1px solid #000; }
 .photos figcaption { font-size: 8pt; text-align: center; margin-top: 1mm; }
 .words { margin-top: 3mm; font-size: 9pt; }
+.talon-page { page-break-after: always; }
+.talon-page:last-child { page-break-after: auto; }
 `)
 	builder.WriteString("</style></head><body>")
 	builder.WriteString(body)

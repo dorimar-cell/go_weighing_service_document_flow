@@ -192,7 +192,7 @@ func renderTorg12(details *dto.SessionDetails, doc dto.Torg12Document, settings 
 	}
 
 	body.WriteString("<h1>Товарная накладная</h1>")
-	body.WriteString("<p class=\"subtitle\">№ " + esc(number) + " от " + esc(documentDateValue) + "</p>")
+	body.WriteString("<p class=\"subtitle\">№ " + esc(number) + " от " + esc(prettyDate(documentDateValue)) + "</p>")
 
 	body.WriteString(pairRows([][2]string{
 		{"Поставщик (грузоотправитель)", orDash(provider)},
@@ -241,7 +241,7 @@ func renderTorg12(details *dto.SessionDetails, doc dto.Torg12Document, settings 
 
 	if doc.ProxyName != "" || doc.ProxyGivenBy != "" || doc.ProxyDate != "" {
 		body.WriteString("<p class=\"words\">Доверенность: № " + orDash(doc.ProxyName) +
-			" от " + orDash(doc.ProxyDate) + ", выдана " + orDash(doc.ProxyGivenBy) + ".</p>")
+			" от " + orDash(prettyDate(doc.ProxyDate)) + ", выдана " + orDash(doc.ProxyGivenBy) + ".</p>")
 	}
 
 	body.WriteString("<p class=\"note\">Бланк ТОРГ-12 сформирован веб-системой весовой. " +

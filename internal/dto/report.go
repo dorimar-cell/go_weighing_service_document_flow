@@ -148,3 +148,21 @@ type Torg12Document struct {
 
 	UpdatedAt *time.Time `json:"updatedAt"`
 }
+
+// InvoiceDocument — реквизиты счёта-фактуры.
+type InvoiceDocument struct {
+	ID        int64 `json:"id"`
+	SessionID int64 `json:"sessionId"`
+	Saved     bool  `json:"saved"`
+
+	Name             string  `json:"name"`
+	Date             string  `json:"date"` // YYYY-MM-DD
+	NDS              float64 `json:"nds"`
+	DocumentName     string  `json:"documentName"`
+	ChiefName        string  `json:"chiefName"`
+	AccountantName   string  `json:"accountantName"`
+	BusinessmanName  string  `json:"businessmanName"`
+	RegIPCertificate string  `json:"regIpCertificate"`
+
+	UpdatedAt *time.Time `json:"updatedAt"`
+}

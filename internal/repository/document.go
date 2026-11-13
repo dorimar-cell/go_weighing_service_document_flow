@@ -528,6 +528,98 @@ func (r *DocumentRepository) SaveTorg12(
 	return r.Torg12(ctx, doc.SessionID)
 }
 
+const invoiceSelect = `
+SELECT id,
+       COALESCE(name, ''),
+       to_char(date, 'YYYY-MM-DD'),
+       COALESCE(nds, 0)::float8,
+       COALESCE(document_name, ''),
+       COALESCE(chief_name, ''),
+       COALESCE(accountant_name, ''),
+       COALESCE(businessman_name, ''),
+       COALESCE(reg_ip_certificate, ''),
+       COALESCE(modified_date, created_date)
+FROM invoice_document
+WHERE id_weighing = $1
+ORDER BY id DESC
+LIMIT 1`
+
+// Invoice возвращает сохранённые реквизиты счёта-фактуры или nil.
+func (r *DocumentRepository) Invoice(ctx context.Context, sessionID int64) (*dto.InvoiceDocument, error) {
+	row := r.pool.QueryRow(ctx, invoiceSelect, sessionID)
+
+	var doc dto.InvoiceDocument
+	var date string
+	err := row.Scan(
+		&doc.ID,
+		&doc.Name,
+		&date,
+		&doc.NDS,
+		&doc.DocumentName,
+		&doc.ChiefName,
+		&doc.AccountantName,
+		&doc.BusinessmanName,
+		&doc.RegIPCertificate,
+		&doc.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("invoice document: %w", err)
+	}
+
+	doc.Date = date
+	doc.SessionID = sessionID
+	doc.Saved = true
+	return &doc, nil
+}
+
+// SaveInvoice создаёт или обновляет реквизиты счёта-фактуры.
+func (r *DocumentRepository) SaveInvoice(
+	ctx context.Context,
+	doc *dto.InvoiceDocument,
+	date time.Time,
+	userID int64,
+) (*dto.InvoiceDocument, error) {
+	existing, err := r.Invoice(ctx, doc.SessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	if existing == nil {
+		var id int64
+		if err := r.pool.QueryRow(ctx, `
+			INSERT INTO invoice_document (
+				id_weighing, name, date, nds, document_name, chief_name,
+				accountant_name, businessman_name, reg_ip_certificate,
+				created_by_user_id, created_date
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
+			RETURNING id`,
+			doc.SessionID, doc.Name, date, doc.NDS, doc.DocumentName, doc.ChiefName,
+			doc.AccountantName, doc.BusinessmanName, doc.RegIPCertificate, userID,
+		).Scan(&id); err != nil {
+			return nil, fmt.Errorf("insert invoice document: %w", err)
+		}
+		return r.Invoice(ctx, doc.SessionID)
+	}
+
+	if _, err := r.pool.Exec(ctx, `
+		UPDATE invoice_document
+		SET name = $2, date = $3, nds = $4, document_name = $5, chief_name = $6,
+		    accountant_name = $7, businessman_name = $8, reg_ip_certificate = $9,
+		    modified_by_user_id = $10, modified_date = now()
+		WHERE id = $1`,
+		existing.ID,
+		doc.Name, date, doc.NDS, doc.DocumentName, doc.ChiefName,
+		doc.AccountantName, doc.BusinessmanName, doc.RegIPCertificate, userID,
+	); err != nil {
+		return nil, fmt.Errorf("update invoice document: %w", err)
+	}
+
+	return r.Invoice(ctx, doc.SessionID)
+}
+
 func ptrFloat(value float64) *float64 {
 	return &value
 }

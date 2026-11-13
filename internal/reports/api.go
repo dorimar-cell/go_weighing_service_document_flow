@@ -40,6 +40,24 @@ func RenderTalon(details *dto.SessionDetails, settings dto.ReportSettings) []byt
 	return renderTalon(details, settings)
 }
 
+// RenderTalonsBatch собирает пакет талонов за период.
+func RenderTalonsBatch(
+	items []dto.SessionDTO,
+	filter JournalFilter,
+	settings dto.ReportSettings,
+) []byte {
+	return renderTalonsBatch(items, filter, settings)
+}
+
+// RenderInvoice собирает счёт-фактуру.
+func RenderInvoice(
+	details *dto.SessionDetails,
+	doc dto.InvoiceDocument,
+	settings dto.ReportSettings,
+) []byte {
+	return renderInvoice(details, doc, settings)
+}
+
 // RenderTSCard собирает карточку транспортного средства.
 func RenderTSCard(
 	details *dto.SessionDetails,
