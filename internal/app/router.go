@@ -80,6 +80,11 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 
 		r.Get("/settings/app", handlers.Settings.GetApp)
 		r.Put("/settings/app", handlers.Settings.SaveApp)
+		r.Get("/settings/profiles", handlers.Extra.Profiles)
+		r.Get("/settings/profiles/{scope}", handlers.Extra.Profile)
+		r.Put("/settings/profiles/{scope}", handlers.Extra.SaveProfileDraft)
+		r.Post("/settings/profiles/{scope}/apply", handlers.Extra.ApplyProfile)
+		r.Get("/settings/agent-config", handlers.Extra.AgentConfig)
 
 		r.Get("/rbac", handlers.RBAC.Matrix)
 		r.Put("/rbac/groups/{id}", handlers.RBAC.SaveGroup)

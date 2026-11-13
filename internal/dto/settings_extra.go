@@ -66,6 +66,7 @@ type SettingsAuditItem struct {
 	Action    string          `json:"action"`
 	UserID    int64           `json:"userId"`
 	UserName  string          `json:"userName"`
+	Version   int             `json:"version"`
 	Payload   json.RawMessage `json:"payload"`
 	CreatedAt time.Time       `json:"createdAt"`
 }

@@ -159,7 +159,7 @@ func (r *SettingsExtraRepository) SettingsAudit(
 
 	rows, err := r.pool.Query(ctx, `
 		SELECT id, scope, COALESCE(entity_id, 0), action, user_id, COALESCE(user_name, ''),
-		       COALESCE(payload::text, '{}'), created_at
+		       version, COALESCE(payload::text, '{}'), created_at
 		FROM settings_audit
 		ORDER BY created_at DESC, id DESC
 		LIMIT $1 OFFSET $2`, pageSize, (page-1)*pageSize)
@@ -174,7 +174,7 @@ func (r *SettingsExtraRepository) SettingsAudit(
 		var payload string
 		if err := rows.Scan(
 			&item.ID, &item.Scope, &item.EntityID, &item.Action, &item.UserID,
-			&item.UserName, &payload, &item.CreatedAt,
+			&item.UserName, &item.Version, &payload, &item.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan settings audit: %w", err)
 		}
@@ -196,14 +196,27 @@ func (r *SettingsExtraRepository) LogSettings(
 	userID int64,
 	payload any,
 ) error {
+	return r.LogSettingsVersion(ctx, scope, entityID, action, userID, 0, payload)
+}
+
+// LogSettingsVersion пишет аудит настройки с номером версии профиля.
+func (r *SettingsExtraRepository) LogSettingsVersion(
+	ctx context.Context,
+	scope string,
+	entityID int64,
+	action string,
+	userID int64,
+	version int,
+	payload any,
+) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal settings audit: %w", err)
 	}
 	_, err = r.pool.Exec(ctx, `
-		INSERT INTO settings_audit (scope, entity_id, action, user_id, user_name, payload)
-		VALUES ($1, $2, $3, $4, (SELECT name FROM dir_users WHERE id = $4), $5::jsonb)`,
-		scope, entityID, action, userID, string(data),
+		INSERT INTO settings_audit (scope, entity_id, action, user_id, user_name, version, payload)
+		VALUES ($1, $2, $3, $4, (SELECT name FROM dir_users WHERE id = $4), $5, $6::jsonb)`,
+		scope, entityID, action, userID, version, string(data),
 	)
 	if err != nil {
 		return fmt.Errorf("insert settings audit: %w", err)

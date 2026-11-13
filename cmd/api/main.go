@@ -68,7 +68,7 @@ func main() {
 	extraRepo := repository.NewSettingsExtraRepository(pool)
 	extraService := service.NewSettingsExtraService(extraRepo)
 	settingsHandler := handler.NewSettingsHandler(settingsService, extraService)
-	extraHandler := handler.NewSettingsExtraHandler(extraService)
+	extraHandler := handler.NewSettingsExtraHandler(extraService, cfg.AgentToken)
 
 	rbacRepo := repository.NewRBACRepository(pool)
 	rbacService := service.NewRBACService(rbacRepo)
