@@ -42,6 +42,26 @@ var catalog = []dto.ReportDefinition{
 		Params:      periodParams(),
 	},
 	{
+		Code:        "first-weight",
+		Title:       "Транспорт на первом взвешивании",
+		Group:       GroupJournals,
+		Kind:        "grid",
+		Description: "Открытые рейсы, ожидающие второго взвешивания: транспорт, груз, вес первого взвешивания.",
+		Formats:     []string{"html"},
+		Params:      periodParams(),
+	},
+	{
+		Code:        "journal-by-transport",
+		Title:       "Журнал по номеру ТС",
+		Group:       GroupJournals,
+		Kind:        "grid",
+		Description: "Закрытые рейсы с группировкой по номеру транспортного средства и дате.",
+		Formats:     []string{"html"},
+		Params: append(periodParams(), dto.ReportParam{
+			Key: "search", Label: "Номер ТС или пропуска", Type: "text",
+		}),
+	},
+	{
 		Code:        "cargo-summary",
 		Title:       "Отчёт по грузам",
 		Group:       GroupAggregates,

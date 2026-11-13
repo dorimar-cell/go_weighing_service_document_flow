@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -64,6 +65,10 @@ func (s *ReportService) Run(ctx context.Context, code string, query url.Values) 
 		return s.runJournal(ctx, query, format)
 	case "talons":
 		return s.runTalons(ctx, query, format)
+	case "first-weight":
+		return s.runFirstWeight(ctx, query, format)
+	case "journal-by-transport":
+		return s.runTransportJournal(ctx, query, format)
 	case "ts-card", "talon", "ttn", "torg12", "invoice":
 		return s.runDocument(ctx, code, query, format)
 	}
@@ -151,6 +156,99 @@ func (s *ReportService) runTalons(
 		Name:        "talons-" + time.Now().Format("20060102-150405") + ".html",
 		ContentType: "text/html; charset=utf-8",
 		Data:        reports.RenderTalonsBatch(items, filter, settings),
+	}, nil
+}
+
+func (s *ReportService) runFirstWeight(
+	ctx context.Context,
+	query url.Values,
+	format string,
+) (*ReportFile, error) {
+	if format != "html" {
+		return nil, &ValidationError{Message: "Отчёт формируется в HTML (печать из браузера)"}
+	}
+
+	dateFrom, err := parseReportDate(query.Get("dateFrom"), false)
+	if err != nil {
+		return nil, err
+	}
+	dateTo, err := parseReportDate(query.Get("dateTo"), true)
+	if err != nil {
+		return nil, err
+	}
+
+	items, err := s.sessions.Export(ctx, "open", "", dateFrom, dateTo)
+	if err != nil {
+		return nil, err
+	}
+
+	settings, err := s.Settings(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	filter := reports.JournalFilter{
+		DateFrom:     strings.TrimSpace(query.Get("dateFrom")),
+		DateTo:       strings.TrimSpace(query.Get("dateTo")),
+		StatusLabel:  "Открытые",
+		Organization: settings.OrganizationName,
+	}
+
+	return &ReportFile{
+		Name:        "first-weight-" + time.Now().Format("20060102-150405") + ".html",
+		ContentType: "text/html; charset=utf-8",
+		Data:        reports.RenderFirstWeight(items, filter),
+	}, nil
+}
+
+func (s *ReportService) runTransportJournal(
+	ctx context.Context,
+	query url.Values,
+	format string,
+) (*ReportFile, error) {
+	if format != "html" {
+		return nil, &ValidationError{Message: "Отчёт формируется в HTML (печать из браузера)"}
+	}
+
+	dateFrom, err := parseReportDate(query.Get("dateFrom"), false)
+	if err != nil {
+		return nil, err
+	}
+	dateTo, err := parseReportDate(query.Get("dateTo"), true)
+	if err != nil {
+		return nil, err
+	}
+
+	search := strings.TrimSpace(query.Get("search"))
+	items, err := s.sessions.Export(ctx, "closed", search, dateFrom, dateTo)
+	if err != nil {
+		return nil, err
+	}
+
+	sort.SliceStable(items, func(left, right int) bool {
+		if items[left].TransportNumber != items[right].TransportNumber {
+			return items[left].TransportNumber < items[right].TransportNumber
+		}
+		return items[left].FirstMeasuredAt.Before(items[right].FirstMeasuredAt)
+	})
+
+	settings, err := s.Settings(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	filter := reports.JournalFilter{
+		DateFrom:     strings.TrimSpace(query.Get("dateFrom")),
+		DateTo:       strings.TrimSpace(query.Get("dateTo")),
+		StatusLabel:  "Закрытые",
+		Search:       search,
+		Organization: settings.OrganizationName,
+	}
+
+	return &ReportFile{
+		Name:        "journal-by-transport-" + time.Now().Format("20060102-150405") + ".html",
+		ContentType: "text/html; charset=utf-8",
+		Data:        reports.RenderTransportJournal(items, filter),
 	}, nil
 }
 

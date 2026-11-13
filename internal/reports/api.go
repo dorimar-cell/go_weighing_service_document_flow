@@ -49,6 +49,16 @@ func RenderTalonsBatch(
 	return renderTalonsBatch(items, filter, settings)
 }
 
+// RenderFirstWeight собирает отчёт по транспорту на первом взвешивании.
+func RenderFirstWeight(items []dto.SessionDTO, filter JournalFilter) []byte {
+	return renderFirstWeight(items, filter)
+}
+
+// RenderTransportJournal собирает журнал по номеру ТС.
+func RenderTransportJournal(items []dto.SessionDTO, filter JournalFilter) []byte {
+	return renderTransportJournal(items, filter)
+}
+
 // RenderInvoice собирает счёт-фактуру.
 func RenderInvoice(
 	details *dto.SessionDetails,
