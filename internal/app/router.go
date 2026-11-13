@@ -21,6 +21,7 @@ type Handlers struct {
 	Users      *handler.UsersHandler
 	Health     *handler.HealthHandler
 	Station    *handler.StationHandler
+	Extra      *handler.SettingsExtraHandler
 	Metrics    *handler.MetricsHandler
 }
 
@@ -38,6 +39,7 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 	router.Get("/metrics", handlers.Metrics.Check)
 
 	router.Route("/spa/api/weighing", func(r chi.Router) {
+		r.Use(middleware.RateLimiter(30, 60))
 		r.Use(auth.Handler)
 
 		r.Get("/dictionaries/{code}", handlers.Dictionary.List)
@@ -94,6 +96,14 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 
 		r.Get("/stations", handlers.Station.List)
 		r.Put("/stations/{id}", handlers.Station.Save)
+
+		r.Get("/cameras", handlers.Extra.Cameras)
+		r.Put("/cameras/{id}", handlers.Extra.SaveCamera)
+		r.Get("/licenses", handlers.Extra.Licenses)
+		r.Post("/licenses", handlers.Extra.CreateLicense)
+		r.Put("/licenses/{id}", handlers.Extra.UpdateLicense)
+		r.Delete("/licenses/{id}", handlers.Extra.DeleteLicense)
+		r.Get("/settings-audit", handlers.Extra.SettingsAudit)
 
 		r.Get("/reports", handlers.Report.Catalog)
 		r.Get("/reports/settings", handlers.Report.GetSettings)

@@ -10,10 +10,11 @@ import (
 // SettingsHandler — бизнес-настройки полей рейса.
 type SettingsHandler struct {
 	service *service.SettingsService
+	extra   *service.SettingsExtraService
 }
 
-func NewSettingsHandler(svc *service.SettingsService) *SettingsHandler {
-	return &SettingsHandler{service: svc}
+func NewSettingsHandler(svc *service.SettingsService, extra *service.SettingsExtraService) *SettingsHandler {
+	return &SettingsHandler{service: svc, extra: extra}
 }
 
 // GetApp: GET /spa/api/weighing/settings/app
@@ -47,6 +48,10 @@ func (h *SettingsHandler) SaveApp(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal_error", "Не удалось сохранить настройки")
 		return
+	}
+
+	if h.extra != nil {
+		h.extra.Log(r.Context(), "app", 1, "updated", currentUserID(r), payload)
 	}
 
 	writeJSON(w, http.StatusOK, settings)

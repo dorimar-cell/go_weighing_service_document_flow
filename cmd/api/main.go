@@ -65,7 +65,10 @@ func main() {
 	sessionHandler := handler.NewSessionHandler(sessionService)
 
 	settingsService := service.NewSettingsService(settingsRepo)
-	settingsHandler := handler.NewSettingsHandler(settingsService)
+	extraRepo := repository.NewSettingsExtraRepository(pool)
+	extraService := service.NewSettingsExtraService(extraRepo)
+	settingsHandler := handler.NewSettingsHandler(settingsService, extraService)
+	extraHandler := handler.NewSettingsExtraHandler(extraService)
 
 	rbacRepo := repository.NewRBACRepository(pool)
 	rbacService := service.NewRBACService(rbacRepo)
@@ -80,7 +83,7 @@ func main() {
 
 	stationRepo := repository.NewStationRepository(pool)
 	stationService := service.NewStationService(stationRepo)
-	stationHandler := handler.NewStationHandler(stationService)
+	stationHandler := handler.NewStationHandler(stationService, extraService)
 
 	photoRepo := repository.NewPhotoRepository(pool)
 	photoService := service.NewPhotoService(photoRepo, cfg.PhotoDir)
@@ -102,6 +105,7 @@ func main() {
 			Users:      usersHandler,
 			Health:     healthHandler,
 			Station:    stationHandler,
+			Extra:      extraHandler,
 			Metrics:    metricsHandler,
 		},
 		auth,

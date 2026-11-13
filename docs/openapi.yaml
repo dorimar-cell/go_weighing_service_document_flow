@@ -252,6 +252,64 @@ paths:
       summary: Save field settings (W009)
       responses:
         '200': { description: Settings }
+  /spa/api/weighing/cameras:
+    get:
+      summary: Camera settings (W009)
+      responses:
+        '200': { description: Cameras }
+  /spa/api/weighing/cameras/{id}:
+    put:
+      summary: Save camera settings (W009)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Cameras }
+        '400': { description: Validation error }
+        '404': { description: Camera not found }
+  /spa/api/weighing/licenses:
+    get:
+      summary: License registry (W009)
+      responses:
+        '200': { description: Licenses }
+    post:
+      summary: Create license (W009)
+      responses:
+        '201': { description: Licenses }
+        '400': { description: Validation error }
+  /spa/api/weighing/licenses/{id}:
+    put:
+      summary: Update license (W009)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Licenses }
+        '404': { description: License not found }
+    delete:
+      summary: Delete license (W009)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Licenses }
+  /spa/api/weighing/settings-audit:
+    get:
+      summary: Settings change audit (W009)
+      parameters:
+        - { in: query, name: page, schema: { type: integer } }
+        - { in: query, name: pageSize, schema: { type: integer } }
+      responses:
+        '200': { description: Settings audit page }
+  /spa/api/weighing/reports/favorites:
+    get:
+      summary: Favorite reports
+      responses:
+        '200': { description: Report codes }
+  /spa/api/weighing/reports/{code}/favorite:
+    put:
+      summary: Add or remove favorite report
+      parameters:
+        - { in: path, name: code, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Favorite state }
   /spa/api/weighing/reports:
     get:
       summary: Report catalog

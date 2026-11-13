@@ -12,10 +12,11 @@ import (
 // StationHandler — весовые и терминалы.
 type StationHandler struct {
 	service *service.StationService
+	extra   *service.SettingsExtraService
 }
 
-func NewStationHandler(svc *service.StationService) *StationHandler {
-	return &StationHandler{service: svc}
+func NewStationHandler(svc *service.StationService, extra *service.SettingsExtraService) *StationHandler {
+	return &StationHandler{service: svc, extra: extra}
 }
 
 // List: GET /spa/api/weighing/stations
@@ -63,6 +64,10 @@ func (h *StationHandler) Save(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, http.StatusInternalServerError, "internal_error", "Не удалось сохранить станцию")
 		return
+	}
+
+	if h.extra != nil {
+		h.extra.Log(r.Context(), "station", id, "updated", currentUserID(r), payload)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
