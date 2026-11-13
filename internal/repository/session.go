@@ -162,6 +162,13 @@ func (r *SessionRepository) Create(
 		return nil, err
 	}
 
+	if err := insertSessionAudit(ctx, tx, weighingID, "created", userID, map[string]any{
+		"firstWeightKg":   req.Measurement.WeightKg,
+		"transportNumber": req.TransportNumber,
+	}); err != nil {
+		return nil, err
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit create session: %w", err)
 	}
@@ -230,6 +237,12 @@ func (r *SessionRepository) Close(
 	}
 
 	if err := insertMeasurement(ctx, tx, id, 2, measurement); err != nil {
+		return nil, err
+	}
+
+	if err := insertSessionAudit(ctx, tx, id, "closed", userID, map[string]any{
+		"secondWeightKg": measurement.WeightKg,
+	}); err != nil {
 		return nil, err
 	}
 
@@ -303,6 +316,12 @@ func (r *SessionRepository) CloseWithManualTare(
 		); err != nil {
 			return nil, fmt.Errorf("close one-time pass: %w", err)
 		}
+	}
+
+	if err := insertSessionAudit(ctx, tx, id, "flow_closed", userID, map[string]any{
+		"tareKg": tareKg,
+	}); err != nil {
+		return nil, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -485,6 +504,10 @@ func (r *SessionRepository) Cancel(ctx context.Context, id int64, userID int64) 
 		`UPDATE weighing_info SET deleted = true WHERE id = $1`, infoID,
 	); err != nil {
 		return fmt.Errorf("cancel weighing_info: %w", err)
+	}
+
+	if err := insertSessionAudit(ctx, tx, id, "cancelled", userID, nil); err != nil {
+		return err
 	}
 
 	return tx.Commit(ctx)

@@ -48,7 +48,9 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 		r.Get("/sessions/export", handlers.Session.Export)
 		r.Get("/sessions/export.xlsx", handlers.Session.ExportXLSX)
 		r.Get("/sessions/{id}", handlers.Session.Get)
+		r.Patch("/sessions/{id}", handlers.Session.Update)
 		r.Get("/sessions/{id}/measurements", handlers.Session.Measurements)
+		r.Get("/sessions/{id}/audit", handlers.Session.Audit)
 		r.Post("/sessions/{id}/second", handlers.Session.Close)
 		r.Post("/sessions/{id}/cancel", handlers.Session.Cancel)
 		r.Post("/sessions/{id}/photos", handlers.Photo.Upload)
@@ -56,6 +58,8 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 		r.Get("/sessions/{id}/photos/{photoId}/file", handlers.Photo.File)
 		r.Get("/sessions/{id}/documents/{kind}", handlers.Report.GetDocument)
 		r.Put("/sessions/{id}/documents/{kind}", handlers.Report.SaveDocument)
+
+		r.Get("/permissions", handlers.Session.Permissions)
 
 		r.Get("/reports", handlers.Report.Catalog)
 		r.Get("/reports/settings", handlers.Report.GetSettings)

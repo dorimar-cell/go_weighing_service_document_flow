@@ -157,6 +157,65 @@ func (s *SessionService) Measurements(ctx context.Context, id int64) ([]dto.Meas
 	return s.repo.Measurements(ctx, id)
 }
 
+// Update правит рейс: реквизиты, веса и время взвешиваний.
+func (s *SessionService) Update(
+	ctx context.Context,
+	id int64,
+	request dto.UpdateSessionRequest,
+	userID int64,
+) (*dto.SessionDTO, error) {
+	if id <= 0 {
+		return nil, &ValidationError{Message: "Некорректный идентификатор рейса"}
+	}
+
+	request.TransportNumber = strings.TrimSpace(request.TransportNumber)
+	request.TrailerNumber = strings.TrimSpace(request.TrailerNumber)
+	request.DriverName = strings.TrimSpace(request.DriverName)
+
+	if request.TransportNumber == "" {
+		return nil, &ValidationError{Message: "Укажите номер транспортного средства"}
+	}
+	if request.FirstWeightKg < 0 {
+		return nil, &ValidationError{Message: "Вес первого взвешивания не может быть отрицательным"}
+	}
+	if request.FirstMeasuredAt.IsZero() {
+		return nil, &ValidationError{Message: "Укажите дату и время первого взвешивания"}
+	}
+
+	existing, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if existing.Status == "cancelled" {
+		return nil, &ValidationError{Message: "Отменённый рейс нельзя редактировать"}
+	}
+
+	if existing.Status == "closed" {
+		if request.SecondWeightKg == nil {
+			return nil, &ValidationError{Message: "Укажите вес второго взвешивания"}
+		}
+		if *request.SecondWeightKg < 0 {
+			return nil, &ValidationError{Message: "Вес второго взвешивания не может быть отрицательным"}
+		}
+		if request.SecondMeasuredAt == nil {
+			return nil, &ValidationError{Message: "Укажите дату и время второго взвешивания"}
+		}
+	} else {
+		request.SecondWeightKg = nil
+		request.SecondMeasuredAt = nil
+	}
+
+	return s.repo.Update(ctx, id, request, userID)
+}
+
+// Audit возвращает историю изменений рейса.
+func (s *SessionService) Audit(ctx context.Context, id int64) ([]dto.SessionAuditRecord, error) {
+	if id <= 0 {
+		return nil, &ValidationError{Message: "Некорректный идентификатор рейса"}
+	}
+	return s.repo.Audit(ctx, id)
+}
+
 func (s *SessionService) Export(
 	ctx context.Context,
 	status string,

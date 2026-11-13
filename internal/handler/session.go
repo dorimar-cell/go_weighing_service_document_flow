@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/xuri/excelize/v2"
 
 	"go_weighing_service/internal/dto"
+	"go_weighing_service/internal/middleware"
 	"go_weighing_service/internal/repository"
 	"go_weighing_service/internal/service"
 )
@@ -385,6 +387,74 @@ func formatCSVTime(value *time.Time) string {
 		return ""
 	}
 	return value.Format("02.01.2006 15:04")
+}
+
+// Update: PATCH /spa/api/weighing/sessions/{id}
+func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permEdit) {
+		return
+	}
+
+	id, err := parseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_id", "Некорректный идентификатор рейса")
+		return
+	}
+
+	var request dto.UpdateSessionRequest
+	if err := decodeJSON(w, r, &request); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+		return
+	}
+
+	session, err := h.service.Update(r.Context(), id, request, currentUserID(r))
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, session)
+}
+
+// Audit: GET /spa/api/weighing/sessions/{id}/audit
+func (h *SessionHandler) Audit(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permJournal) {
+		return
+	}
+
+	id, err := parseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_id", "Некорректный идентификатор рейса")
+		return
+	}
+
+	items, err := h.service.Audit(r.Context(), id)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+// Permissions: GET /spa/api/weighing/permissions — права текущего пользователя.
+func (h *SessionHandler) Permissions(w http.ResponseWriter, r *http.Request) {
+	user, ok := middleware.GetUser(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "Пользователь не определён")
+		return
+	}
+
+	codes := make([]string, 0, len(user.Permissions))
+	for code := range user.Permissions {
+		codes = append(codes, code)
+	}
+	sort.Strings(codes)
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"isRoot":      user.IsRoot,
+		"permissions": codes,
+	})
 }
 
 // Measurements: GET /spa/api/weighing/sessions/{id}/measurements
