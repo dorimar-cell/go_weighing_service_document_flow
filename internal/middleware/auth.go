@@ -79,6 +79,14 @@ func (a *Auth) Handler(next http.Handler) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Агент станции не имеет JWT портала: для выдачи применённой конфигурации
+		// достаточно X-Agent-Token. Неверный токен отклонит обработчик (401).
+		if strings.HasSuffix(r.URL.Path, "/settings/agent-config") &&
+			strings.TrimSpace(r.Header.Get("X-Agent-Token")) != "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		header := r.Header.Get("Authorization")
 		parts := strings.SplitN(header, " ", 2)
 		if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
