@@ -77,6 +77,15 @@ func RenderTTNBatch(
 	return renderTTNBatch(items, filter, settings)
 }
 
+// RenderCargoActBatch собирает пакет актов за период.
+func RenderCargoActBatch(
+	items []CargoActBatchItem,
+	filter JournalFilter,
+	settings dto.ReportSettings,
+) []byte {
+	return renderCargoActBatch(items, filter, settings)
+}
+
 // RenderCargoAct собирает акт приёма-передачи товара.
 func RenderCargoAct(details *dto.SessionDetails, settings dto.ReportSettings) []byte {
 	return renderCargoAct(details, settings)

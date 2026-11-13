@@ -63,6 +63,84 @@ type DictionaryExport struct {
 	Items  []map[string]any
 }
 
+// AuditList возвращает журнал аудита справочников.
+func (s *DictionaryService) AuditList(
+	ctx context.Context,
+	code string,
+	action string,
+	page int,
+	pageSize int,
+) (*dto.DictionaryAuditResponse, error) {
+	page, pageSize = normalizePaging(page, pageSize)
+	return s.repo.AuditList(ctx, code, action, page, pageSize)
+}
+
+// Audit пишет действие над справочником.
+func (s *DictionaryService) Audit(
+	ctx context.Context,
+	code string,
+	recordID int64,
+	action string,
+	userID int64,
+	payload any,
+) error {
+	return s.repo.Audit(ctx, code, recordID, action, userID, payload)
+}
+
+// ImportCSV создаёт записи из разобранных строк CSV и возвращает статистику.
+func (s *DictionaryService) ImportCSV(
+	ctx context.Context,
+	code string,
+	rows []map[string]any,
+	userID int64,
+) (int, []string, error) {
+	if len(rows) > 5000 {
+		return 0, nil, &ValidationError{Message: "Слишком много строк для импорта (макс. 5000)"}
+	}
+
+	def, err := resolve(code)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	imported := 0
+	errorsList := make([]string, 0)
+
+	for index, row := range rows {
+		raw := make(map[string]json.RawMessage, len(row))
+		for key, value := range row {
+			encoded, err := json.Marshal(value)
+			if err != nil {
+				errorsList = append(errorsList, fmt.Sprintf("строка %d: некорректное значение %s", index+2, key))
+				continue
+			}
+			raw[key] = encoded
+		}
+
+		item, err := s.Create(ctx, code, raw)
+		if err != nil {
+			errorsList = append(errorsList, fmt.Sprintf("строка %d: %v", index+2, err))
+			continue
+		}
+
+		imported++
+		recordID := int64(0)
+		if value, ok := item["id"]; ok {
+			switch typed := value.(type) {
+			case int64:
+				recordID = typed
+			case int32:
+				recordID = int64(typed)
+			case float64:
+				recordID = int64(typed)
+			}
+		}
+		_ = s.repo.Audit(ctx, def.Code, recordID, "imported", userID, item)
+	}
+
+	return imported, errorsList, nil
+}
+
 // Export возвращает все записи справочника для CSV.
 func (s *DictionaryService) Export(
 	ctx context.Context,

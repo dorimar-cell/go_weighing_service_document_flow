@@ -359,10 +359,28 @@ func (r *SessionRepository) List(
 	search string,
 	dateFrom *time.Time,
 	dateTo *time.Time,
+	sortBy string,
+	direction string,
 	page int,
 	pageSize int,
 ) (*dto.SessionListResponse, error) {
 	where, args := buildSessionWhere(status, search, dateFrom, dateTo)
+
+	orderExpression := "w.created_date"
+	switch sortBy {
+	case "date":
+		orderExpression = "w.date_time_first_weight"
+	case "transport":
+		orderExpression = "lower(t.name)"
+	case "firstWeight":
+		orderExpression = "w.first_weight"
+	case "netto":
+		orderExpression = "abs(w.first_weight - COALESCE(w.second_weight, w.first_weight))"
+	}
+	orderDirection := "DESC"
+	if strings.EqualFold(direction, "asc") {
+		orderDirection = "ASC"
+	}
 
 	var total int
 	if err := r.pool.QueryRow(ctx, "SELECT count(*) "+sessionFrom+" "+where, args...).Scan(&total); err != nil {
@@ -375,7 +393,8 @@ func (r *SessionRepository) List(
 	offsetArg := len(args)
 
 	query := sessionSelect + " " + where +
-		fmt.Sprintf(" ORDER BY w.created_date DESC LIMIT $%d OFFSET $%d", limitArg, offsetArg)
+		fmt.Sprintf(" ORDER BY %s %s LIMIT $%d OFFSET $%d",
+			orderExpression, orderDirection, limitArg, offsetArg)
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {

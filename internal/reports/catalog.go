@@ -89,6 +89,15 @@ var catalog = []dto.ReportDefinition{
 		Params:      periodParams(),
 	},
 	{
+		Code:        "cargo-act-batch",
+		Title:       "Акты приёма-передачи за период",
+		Group:       GroupJournals,
+		Kind:        "grid",
+		Description: "Пакетная печать актов приёма-передачи по закрытым рейсам: три экземпляра на рейс.",
+		Formats:     []string{"html"},
+		Params:      periodParams(),
+	},
+	{
 		Code:        "cargo-summary",
 		Title:       "Отчёт по грузам",
 		Group:       GroupAggregates,

@@ -9,6 +9,11 @@ import (
 
 // renderCargoAct собирает акт приёма-передачи товара в трёх экземплярах.
 func renderCargoAct(details *dto.SessionDetails, settings dto.ReportSettings) []byte {
+	return wrapHTML("Акт приёма-передачи товара", false, cargoActBody(details, settings))
+}
+
+// cargoActBody — тело акта без HTML-обёртки.
+func cargoActBody(details *dto.SessionDetails, settings dto.ReportSettings) string {
 	copies := []struct {
 		Title string
 		Role  string
@@ -61,11 +66,20 @@ func renderCargoAct(details *dto.SessionDetails, settings dto.ReportSettings) []
 	body.WriteString("<p class=\"note\">Акт сформирован веб-системой весовой; объём и подписи " +
 		"заполняются при передаче товара. Один экземпляр — охране, один — водителю, один — весовщику.</p>")
 
-	return wrapHTML("Акт приёма-передачи товара", false, body.String())
+	return body.String()
 }
 
 // renderUploadingCertificate собирает свидетельство о разгрузке/погрузке Т/С.
 func renderUploadingCertificate(details *dto.SessionDetails, settings dto.ReportSettings) []byte {
+	documentNumber := details.Session.PassNumber
+	if documentNumber == "" {
+		documentNumber = fmt.Sprintf("%d", details.Session.ID)
+	}
+	return wrapHTML("Свидетельство №"+documentNumber, false, uploadingBody(details, settings))
+}
+
+// uploadingBody — тело свидетельства без HTML-обёртки.
+func uploadingBody(details *dto.SessionDetails, settings dto.ReportSettings) string {
 	session := &details.Session
 	brutto, tare := bruttoTare(session)
 
@@ -121,5 +135,5 @@ func renderUploadingCertificate(details *dto.SessionDetails, settings dto.Report
 	body.WriteString("<p class=\"note\">Свидетельство сформировано веб-системой весовой и подтверждает " +
 		"факт разгрузки/погрузки транспортного средства на весовой.</p>")
 
-	return wrapHTML("Свидетельство №"+documentNumber, false, body.String())
+	return body.String()
 }

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"go_weighing_service/internal/dto"
 	"go_weighing_service/internal/model"
 	"go_weighing_service/internal/registry"
 )
@@ -88,6 +90,91 @@ func (r *DictionaryRepository) List(
 	}
 
 	return &model.DictionaryList{Items: items, Total: total}, nil
+}
+
+// Audit пишет действие над справочником.
+func (r *DictionaryRepository) Audit(
+	ctx context.Context,
+	code string,
+	recordID int64,
+	action string,
+	userID int64,
+	payload any,
+) error {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal dictionary audit: %w", err)
+	}
+
+	_, err = r.pool.Exec(ctx, `
+		INSERT INTO dictionary_audit (code, record_id, action, user_id, user_name, payload)
+		VALUES ($1, $2, $3, $4, (SELECT name FROM dir_users WHERE id = $4), $5::jsonb)`,
+		code, recordID, action, userID, string(data),
+	)
+	if err != nil {
+		return fmt.Errorf("insert dictionary audit: %w", err)
+	}
+	return nil
+}
+
+// AuditList возвращает журнал аудита справочников.
+func (r *DictionaryRepository) AuditList(
+	ctx context.Context,
+	code string,
+	action string,
+	page int,
+	pageSize int,
+) (*dto.DictionaryAuditResponse, error) {
+	where := []string{"1 = 1"}
+	args := make([]any, 0, 2)
+
+	if strings.TrimSpace(code) != "" {
+		args = append(args, strings.TrimSpace(code))
+		where = append(where, fmt.Sprintf("code = $%d", len(args)))
+	}
+	if strings.TrimSpace(action) != "" {
+		args = append(args, strings.TrimSpace(action))
+		where = append(where, fmt.Sprintf("action = $%d", len(args)))
+	}
+	whereSQL := " WHERE " + strings.Join(where, " AND ")
+
+	var total int
+	if err := r.pool.QueryRow(ctx, "SELECT count(*) FROM dictionary_audit"+whereSQL, args...).Scan(&total); err != nil {
+		return nil, fmt.Errorf("count dictionary audit: %w", err)
+	}
+
+	args = append(args, pageSize)
+	limitArg := len(args)
+	args = append(args, (page-1)*pageSize)
+	offsetArg := len(args)
+
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, code, COALESCE(record_id, 0), action, user_id, COALESCE(user_name, ''), payload, created_at
+		FROM dictionary_audit`+whereSQL+fmt.Sprintf(
+		" ORDER BY created_at DESC, id DESC LIMIT $%d OFFSET $%d", limitArg, offsetArg,
+	), args...)
+	if err != nil {
+		return nil, fmt.Errorf("list dictionary audit: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]dto.DictionaryAuditItem, 0, pageSize)
+	for rows.Next() {
+		var item dto.DictionaryAuditItem
+		var payload []byte
+		if err := rows.Scan(
+			&item.ID, &item.Code, &item.RecordID, &item.Action, &item.UserID,
+			&item.UserName, &payload, &item.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan dictionary audit: %w", err)
+		}
+		item.Payload = json.RawMessage(payload)
+		items = append(items, item)
+	}
+
+	return &dto.DictionaryAuditResponse{
+		Items: items, Page: page, PageSize: pageSize, Total: total,
+	}, rows.Err()
 }
 
 // Export возвращает все записи справочника (до 10000) для выгрузки.

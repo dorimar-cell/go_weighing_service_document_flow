@@ -154,6 +154,8 @@ func (s *SessionService) List(
 	search string,
 	dateFrom *time.Time,
 	dateTo *time.Time,
+	sortBy string,
+	direction string,
 	page int,
 	pageSize int,
 ) (*dto.SessionListResponse, error) {
@@ -168,7 +170,8 @@ func (s *SessionService) List(
 	}
 
 	page, pageSize = normalizePaging(page, pageSize)
-	return s.repo.List(ctx, status, strings.TrimSpace(search), dateFrom, dateTo, page, pageSize)
+	return s.repo.List(ctx, status, strings.TrimSpace(search), dateFrom, dateTo,
+		sortBy, direction, page, pageSize)
 }
 
 func (s *SessionService) Get(ctx context.Context, id int64) (*dto.SessionDTO, error) {
@@ -183,6 +186,41 @@ func (s *SessionService) Cancel(ctx context.Context, id int64, userID int64) err
 		return &ValidationError{Message: "Некорректный идентификатор рейса"}
 	}
 	return s.repo.Cancel(ctx, id, userID)
+}
+
+// Bulk выполняет массовую отмену или восстановление рейсов.
+func (s *SessionService) Bulk(
+	ctx context.Context,
+	action string,
+	ids []int64,
+	userID int64,
+) (*dto.BulkSessionResponse, error) {
+	if len(ids) == 0 {
+		return nil, &ValidationError{Message: "Не выбрано ни одного рейса"}
+	}
+	if len(ids) > 200 {
+		return nil, &ValidationError{Message: "Слишком много рейсов (макс. 200)"}
+	}
+
+	result := &dto.BulkSessionResponse{Failed: make([]dto.BulkSessionFailure, 0)}
+	for _, id := range ids {
+		var err error
+		switch action {
+		case "cancel":
+			err = s.Cancel(ctx, id, userID)
+		case "restore":
+			err = s.Restore(ctx, id, userID)
+		default:
+			return nil, &ValidationError{Message: "Неизвестное действие: " + action}
+		}
+		if err != nil {
+			result.Failed = append(result.Failed, dto.BulkSessionFailure{ID: id, Message: err.Error()})
+			continue
+		}
+		result.Updated++
+	}
+
+	return result, nil
 }
 
 // Restore возвращает отменённый рейс.

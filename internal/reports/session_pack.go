@@ -29,13 +29,15 @@ func renderSessionPack(pack SessionPack, settings dto.ReportSettings) []byte {
 	if settings.OrganizationName != "" {
 		body.WriteString("<span><b>" + esc(settings.OrganizationName) + "</b></span>")
 	}
-	body.WriteString("<span>Документов: 5</span>")
+	body.WriteString("<span>Документов: 7</span>")
 	body.WriteString("<span>Сформирован: " + nowInLocation().Format("02.01.2006 15:04") + "</span>")
 	body.WriteString("</div>")
 
 	sections := []string{
 		tscardBody(details, settings, pack.Photos),
 		talonVariantBody(details, settings, "base"),
+		cargoActBody(details, settings),
+		uploadingBody(details, settings),
 		ttnBody(details, pack.TTN, settings),
 		torg12Body(details, pack.Torg12, settings),
 		invoiceBody(details, pack.Invoice, settings),

@@ -1,7 +1,6 @@
 package app
 
 import (
-	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -19,6 +18,8 @@ type Handlers struct {
 	Report     *handler.ReportHandler
 	Settings   *handler.SettingsHandler
 	RBAC       *handler.RBACHandler
+	Users      *handler.UsersHandler
+	Health     *handler.HealthHandler
 }
 
 func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *chi.Mux {
@@ -30,16 +31,15 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 	router.Use(chiMiddleware.Timeout(15 * time.Second))
 	router.Use(middleware.CORS(corsOrigins))
 
-	router.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_, _ = w.Write([]byte(`{"status":"ok","service":"weighing"}`))
-	})
+	router.Get("/healthz", handlers.Health.Check)
 
 	router.Route("/spa/api/weighing", func(r chi.Router) {
 		r.Use(auth.Handler)
 
 		r.Get("/dictionaries/{code}", handlers.Dictionary.List)
 		r.Get("/dictionaries/{code}/export.csv", handlers.Dictionary.Export)
+		r.Post("/dictionaries/{code}/import.csv", handlers.Dictionary.Import)
+		r.Get("/dictionary-audit", handlers.Dictionary.AuditList)
 		r.Post("/dictionaries/{code}", handlers.Dictionary.Create)
 		r.Patch("/dictionaries/{code}/{id}", handlers.Dictionary.Update)
 		r.Delete("/dictionaries/{code}/{id}", handlers.Dictionary.Delete)
@@ -57,6 +57,7 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 		r.Post("/sessions/{id}/second", handlers.Session.Close)
 		r.Post("/sessions/{id}/cancel", handlers.Session.Cancel)
 		r.Post("/sessions/{id}/restore", handlers.Session.Restore)
+		r.Post("/sessions/bulk", handlers.Session.Bulk)
 		r.Post("/sessions/{id}/photos", handlers.Photo.Upload)
 		r.Get("/sessions/{id}/photos", handlers.Photo.List)
 		r.Get("/sessions/{id}/photos/{photoId}/file", handlers.Photo.File)
@@ -71,6 +72,12 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 
 		r.Get("/rbac", handlers.RBAC.Matrix)
 		r.Put("/rbac/groups/{id}", handlers.RBAC.SaveGroup)
+
+		r.Get("/users", handlers.Users.List)
+		r.Get("/weight-rooms", handlers.Users.WeightRooms)
+		r.Put("/users/{id}/weight-room", handlers.Users.SetWeightRoom)
+		r.Get("/journal/preferences", handlers.Users.GetPreferences)
+		r.Put("/journal/preferences", handlers.Users.SavePreferences)
 
 		r.Get("/reports", handlers.Report.Catalog)
 		r.Get("/reports/settings", handlers.Report.GetSettings)

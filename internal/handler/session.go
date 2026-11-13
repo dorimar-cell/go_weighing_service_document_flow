@@ -126,7 +126,17 @@ func (h *SessionHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.service.List(r.Context(), status, search, dateFrom, dateTo, page, pageSize)
+	result, err := h.service.List(
+		r.Context(),
+		status,
+		search,
+		dateFrom,
+		dateTo,
+		r.URL.Query().Get("sort"),
+		r.URL.Query().Get("dir"),
+		page,
+		pageSize,
+	)
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -393,6 +403,36 @@ func formatCSVTime(value *time.Time) string {
 		return ""
 	}
 	return value.Format("02.01.2006 15:04")
+}
+
+// Bulk: POST /spa/api/weighing/sessions/bulk
+func (h *SessionHandler) Bulk(w http.ResponseWriter, r *http.Request) {
+	var request dto.BulkSessionRequest
+	if err := decodeJSON(w, r, &request); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+		return
+	}
+
+	switch request.Action {
+	case "cancel":
+		if !requirePermission(w, r, permCancelWeight) {
+			return
+		}
+	case "restore":
+		if !requirePermission(w, r, permEdit) {
+			return
+		}
+	default:
+		writeError(w, http.StatusBadRequest, "invalid_action", "Действие должно быть cancel или restore")
+		return
+	}
+
+	result, err := h.service.Bulk(r.Context(), request.Action, request.IDs, currentUserID(r))
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 // Restore: POST /spa/api/weighing/sessions/{id}/restore

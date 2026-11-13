@@ -71,6 +71,8 @@ func (s *ReportService) Run(ctx context.Context, code string, query url.Values) 
 		return s.runTorg12Batch(ctx, query, format)
 	case "invoice-batch":
 		return s.runInvoiceBatch(ctx, query, format)
+	case "cargo-act-batch":
+		return s.runCargoActBatch(ctx, query, format)
 	case "first-weight":
 		return s.runFirstWeight(ctx, query, format)
 	case "journal-by-transport":
@@ -467,6 +469,60 @@ func (s *ReportService) runInvoiceBatch(
 		Name:        "invoice-batch-" + time.Now().Format("20060102-150405") + ".html",
 		ContentType: "text/html; charset=utf-8",
 		Data:        reports.RenderInvoiceBatch(items, filter, settings),
+	}, nil
+}
+
+func (s *ReportService) runCargoActBatch(
+	ctx context.Context,
+	query url.Values,
+	format string,
+) (*ReportFile, error) {
+	if format != "html" {
+		return nil, &ValidationError{Message: "Пакет актов формируется в HTML (печать из браузера)"}
+	}
+
+	dateFrom, err := parseReportDate(query.Get("dateFrom"), false)
+	if err != nil {
+		return nil, err
+	}
+	dateTo, err := parseReportDate(query.Get("dateTo"), true)
+	if err != nil {
+		return nil, err
+	}
+
+	sessions, err := s.sessions.Export(ctx, "closed", "", dateFrom, dateTo)
+	if err != nil {
+		return nil, err
+	}
+	if len(sessions) > 200 {
+		return nil, &ValidationError{
+			Message: "Слишком много рейсов для пакета актов (макс. 200). Сузьте период.",
+		}
+	}
+
+	settings, err := s.Settings(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]reports.CargoActBatchItem, 0, len(sessions))
+	for index := range sessions {
+		details, err := s.docs.SessionDetails(ctx, sessions[index].ID)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, reports.CargoActBatchItem{Details: details})
+	}
+
+	filter := reports.JournalFilter{
+		DateFrom: strings.TrimSpace(query.Get("dateFrom")),
+		DateTo:   strings.TrimSpace(query.Get("dateTo")),
+	}
+
+	return &ReportFile{
+		Name:        "cargo-act-batch-" + time.Now().Format("20060102-150405") + ".html",
+		ContentType: "text/html; charset=utf-8",
+		Data:        reports.RenderCargoActBatch(items, filter, settings),
 	}, nil
 }
 
