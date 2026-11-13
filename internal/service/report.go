@@ -69,7 +69,7 @@ func (s *ReportService) Run(ctx context.Context, code string, query url.Values) 
 		return s.runFirstWeight(ctx, query, format)
 	case "journal-by-transport":
 		return s.runTransportJournal(ctx, query, format)
-	case "ts-card", "talon", "ttn", "torg12", "invoice":
+	case "ts-card", "talon", "cargo-act", "uploading-certificate", "ttn", "torg12", "invoice":
 		return s.runDocument(ctx, code, query, format)
 	}
 
@@ -419,6 +419,18 @@ func (s *ReportService) runDocument(
 			Name:        fmt.Sprintf("talon-%d-%s.html", sessionID, stamp),
 			ContentType: "text/html; charset=utf-8",
 			Data:        reports.RenderTalon(details, settings),
+		}, nil
+	case "cargo-act":
+		return &ReportFile{
+			Name:        fmt.Sprintf("cargo-act-%d-%s.html", sessionID, stamp),
+			ContentType: "text/html; charset=utf-8",
+			Data:        reports.RenderCargoAct(details, settings),
+		}, nil
+	case "uploading-certificate":
+		return &ReportFile{
+			Name:        fmt.Sprintf("uploading-certificate-%d-%s.html", sessionID, stamp),
+			ContentType: "text/html; charset=utf-8",
+			Data:        reports.RenderUploadingCertificate(details, settings),
 		}, nil
 	case "ttn":
 		doc := s.ttnDefaults(details, settings)

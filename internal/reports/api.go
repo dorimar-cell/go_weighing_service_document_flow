@@ -59,6 +59,16 @@ func RenderTransportJournal(items []dto.SessionDTO, filter JournalFilter) []byte
 	return renderTransportJournal(items, filter)
 }
 
+// RenderCargoAct собирает акт приёма-передачи товара.
+func RenderCargoAct(details *dto.SessionDetails, settings dto.ReportSettings) []byte {
+	return renderCargoAct(details, settings)
+}
+
+// RenderUploadingCertificate собирает свидетельство о разгрузке/погрузке.
+func RenderUploadingCertificate(details *dto.SessionDetails, settings dto.ReportSettings) []byte {
+	return renderUploadingCertificate(details, settings)
+}
+
 // RenderInvoice собирает счёт-фактуру.
 func RenderInvoice(
 	details *dto.SessionDetails,
