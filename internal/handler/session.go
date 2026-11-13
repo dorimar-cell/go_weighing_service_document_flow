@@ -40,6 +40,9 @@ func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
 		return
 	}
+	if !allowManualWeight(w, r, request.ManualWeightKg) {
+		return
+	}
 
 	session, err := h.service.Create(r.Context(), request, currentUserID(r))
 	if err != nil {
@@ -59,6 +62,9 @@ func (h *SessionHandler) Flow(w http.ResponseWriter, r *http.Request) {
 	var request dto.FlowSessionRequest
 	if err := decodeJSON(w, r, &request); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+		return
+	}
+	if !allowManualWeight(w, r, request.ManualWeightKg) {
 		return
 	}
 

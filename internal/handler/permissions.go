@@ -16,7 +16,28 @@ const (
 	permPasses       = "W007"
 	permEdit         = "W008"
 	permSettings     = "W009"
+	permManualWeight = "W010"
+	permZeroWeight   = "W011"
 )
+
+// allowManualWeight проверяет права на ручной и нулевой вес.
+func allowManualWeight(w http.ResponseWriter, r *http.Request, value *float64) bool {
+	if value == nil {
+		return true
+	}
+
+	user, ok := middleware.GetUser(r.Context())
+	if !ok || !user.Can(permManualWeight) {
+		writeError(w, http.StatusForbidden, "forbidden", "Нет права на ручной ввод веса")
+		return false
+	}
+	if *value == 0 && !user.Can(permZeroWeight) {
+		writeError(w, http.StatusForbidden, "forbidden", "Нет права на нулевой вес")
+		return false
+	}
+
+	return true
+}
 
 func requirePermission(w http.ResponseWriter, r *http.Request, permission string) bool {
 	user, ok := middleware.GetUser(r.Context())

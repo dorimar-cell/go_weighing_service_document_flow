@@ -71,6 +71,16 @@ func (s *SessionService) Create(
 	if request.TransportNumber == "" {
 		return nil, &ValidationError{Message: "Укажите номер транспортного средства"}
 	}
+	if request.ManualWeightKg == nil && request.Measurement == nil {
+		return nil, &ValidationError{Message: "Нет измерения веса: нужен подписанный снимок или ручной вес"}
+	}
+	if request.ManualWeightKg != nil {
+		if *request.ManualWeightKg < 0 {
+			return nil, &ValidationError{Message: "Ручной вес не может быть отрицательным"}
+		}
+	} else if err := s.verifier.Verify(*request.Measurement); err != nil {
+		return nil, err
+	}
 	if err := s.checkBlacklist(ctx, request.TransportNumber, request.TrailerNumber, request.DriverName); err != nil {
 		return nil, err
 	}
@@ -87,9 +97,6 @@ func (s *SessionService) Create(
 	); err != nil {
 		return nil, err
 	}
-	if err := s.verifier.Verify(request.Measurement); err != nil {
-		return nil, err
-	}
 
 	return s.repo.Create(ctx, request, userID)
 }
@@ -103,7 +110,17 @@ func (s *SessionService) CreateFlow(
 	if request.TareKg <= 0 {
 		return nil, &ValidationError{Message: "Укажите тару больше нуля"}
 	}
-	if request.TareKg >= request.Measurement.WeightKg {
+
+	gross := 0.0
+	switch {
+	case request.ManualWeightKg != nil:
+		gross = *request.ManualWeightKg
+	case request.Measurement != nil:
+		gross = request.Measurement.WeightKg
+	default:
+		return nil, &ValidationError{Message: "Нет измерения веса: нужен подписанный снимок или ручной вес"}
+	}
+	if request.TareKg >= gross {
 		return nil, &ValidationError{Message: "Тара должна быть меньше брутто"}
 	}
 

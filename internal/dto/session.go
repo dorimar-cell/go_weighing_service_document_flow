@@ -16,17 +16,19 @@ type MeasurementDTO struct {
 }
 
 // CreateSessionRequest — первое взвешивание.
+// Measurement отсутствует при ручном вводе веса (ManualWeightKg).
 type CreateSessionRequest struct {
-	Measurement     MeasurementDTO `json:"measurement"`
-	TransportNumber string         `json:"transportNumber"`
-	TrailerNumber   string         `json:"trailerNumber"`
-	DriverName      string         `json:"driverName"`
-	CargoID         *int64         `json:"cargoId"`
-	CounterpartyID  *int64         `json:"counterpartyId"`
-	CarrierID       *int64         `json:"carrierId"`
-	StorageID       *int64         `json:"storageId"`
-	OperationTypeID *int64         `json:"operationTypeId"`
-	PassID          *int64         `json:"passId"`
+	Measurement     *MeasurementDTO `json:"measurement"`
+	ManualWeightKg  *float64        `json:"manualWeightKg"`
+	TransportNumber string          `json:"transportNumber"`
+	TrailerNumber   string          `json:"trailerNumber"`
+	DriverName      string          `json:"driverName"`
+	CargoID         *int64          `json:"cargoId"`
+	CounterpartyID  *int64          `json:"counterpartyId"`
+	CarrierID       *int64          `json:"carrierId"`
+	StorageID       *int64          `json:"storageId"`
+	OperationTypeID *int64          `json:"operationTypeId"`
+	PassID          *int64          `json:"passId"`
 }
 
 // FlowSessionRequest — поточное взвешивание: брутто с весов, тара вручную.

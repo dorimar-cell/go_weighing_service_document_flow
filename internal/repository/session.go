@@ -82,12 +82,30 @@ func (r *SessionRepository) Create(
 	req dto.CreateSessionRequest,
 	userID int64,
 ) (*dto.SessionDTO, error) {
-	existing, err := r.findByOperation(ctx, req.Measurement.OperationID)
-	if err != nil {
-		return nil, err
+	if req.Measurement != nil {
+		existing, err := r.findByOperation(ctx, req.Measurement.OperationID)
+		if err != nil {
+			return nil, err
+		}
+		if existing != 0 {
+			return r.Get(ctx, existing)
+		}
 	}
-	if existing != 0 {
-		return r.Get(ctx, existing)
+
+	weight := 0.0
+	measuredAt := time.Now()
+	manual := false
+	if req.ManualWeightKg != nil {
+		weight = *req.ManualWeightKg
+		manual = true
+	} else {
+		weight = req.Measurement.WeightKg
+		measuredAt = req.Measurement.MeasuredAt
+	}
+
+	var handleFirst any
+	if manual {
+		handleFirst = weight
 	}
 
 	tx, err := r.pool.Begin(ctx)
@@ -148,23 +166,27 @@ func (r *SessionRepository) Create(
 	var weighingID int64
 	if err := tx.QueryRow(ctx, `
 		INSERT INTO weighing
-			(id_weighting_info, first_weight, flag_weight, deleted, created_by_user_id, created_date,
-			 id_first_weight_user, date_time_first_weight, ref,
+			(id_weighting_info, first_weight, handle_first_weight, flag_weight, deleted,
+			 created_by_user_id, created_date, id_first_weight_user, date_time_first_weight, ref,
 			 first_weight_1c, is_flow_weight, has_edited, second_weight_1c, id_reg_weight)
-		VALUES ($1, $2, false, false, $5, now(), $5, $3, gen_random_uuid(), false, false, false, false, $4)
+		VALUES ($1, $2, $3, false, false, $6, now(), $6, $4, gen_random_uuid(),
+		        false, false, false, false, $5)
 		RETURNING id`,
-		infoID, req.Measurement.WeightKg, req.Measurement.MeasuredAt, req.PassID, userID,
+		infoID, weight, handleFirst, measuredAt, req.PassID, userID,
 	).Scan(&weighingID); err != nil {
 		return nil, fmt.Errorf("insert weighing: %w", err)
 	}
 
-	if err := insertMeasurement(ctx, tx, weighingID, 1, req.Measurement); err != nil {
-		return nil, err
+	if req.Measurement != nil {
+		if err := insertMeasurement(ctx, tx, weighingID, 1, *req.Measurement); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := insertSessionAudit(ctx, tx, weighingID, "created", userID, map[string]any{
-		"firstWeightKg":   req.Measurement.WeightKg,
+		"firstWeightKg":   weight,
 		"transportNumber": req.TransportNumber,
+		"manual":          manual,
 	}); err != nil {
 		return nil, err
 	}
