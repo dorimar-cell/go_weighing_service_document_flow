@@ -197,7 +197,7 @@ func (s *SessionService) AuditJournal(
 ) (*dto.AuditJournalResponse, error) {
 	action = strings.TrimSpace(action)
 	switch action {
-	case "", "created", "closed", "flow_closed", "cancelled", "edited":
+	case "", "created", "closed", "flow_closed", "cancelled", "edited", "document_saved":
 	default:
 		return nil, &ValidationError{Message: fmt.Sprintf("Неизвестное действие: %s", action)}
 	}

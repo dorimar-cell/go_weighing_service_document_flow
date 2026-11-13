@@ -1,11 +1,14 @@
 package handler
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -115,6 +118,55 @@ func (h *DictionaryHandler) Restore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Export: GET /spa/api/weighing/dictionaries/{code}/export.csv?search=
+func (h *DictionaryHandler) Export(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permExport) {
+		return
+	}
+
+	code := chi.URLParam(r, "code")
+	export, err := h.service.Export(r.Context(), code, r.URL.Query().Get("search"))
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(
+		`attachment; filename="%s-%s.csv"`, code, time.Now().Format("20060102-150405"),
+	))
+	_, _ = w.Write([]byte{0xEF, 0xBB, 0xBF})
+
+	writer := csv.NewWriter(w)
+	writer.Comma = ';'
+
+	headers := make([]string, 0, len(export.Fields)+1)
+	headers = append(headers, "id")
+	for _, field := range export.Fields {
+		headers = append(headers, field.Key)
+	}
+	_ = writer.Write(headers)
+
+	for _, item := range export.Items {
+		row := make([]string, 0, len(headers))
+		row = append(row, fmt.Sprint(item["id"]))
+		for _, field := range export.Fields {
+			value := item[field.Key]
+			if value == nil {
+				row = append(row, "")
+				continue
+			}
+			row = append(row, fmt.Sprint(value))
+		}
+		_ = writer.Write(row)
+	}
+
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		slog.Error("export dictionary csv", "code", code, "error", err)
+	}
 }
 
 func (h *DictionaryHandler) handleError(w http.ResponseWriter, err error) {

@@ -38,6 +38,7 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 		r.Use(auth.Handler)
 
 		r.Get("/dictionaries/{code}", handlers.Dictionary.List)
+		r.Get("/dictionaries/{code}/export.csv", handlers.Dictionary.Export)
 		r.Post("/dictionaries/{code}", handlers.Dictionary.Create)
 		r.Patch("/dictionaries/{code}/{id}", handlers.Dictionary.Update)
 		r.Delete("/dictionaries/{code}/{id}", handlers.Dictionary.Delete)

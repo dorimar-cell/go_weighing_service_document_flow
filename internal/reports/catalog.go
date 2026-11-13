@@ -47,7 +47,7 @@ var catalog = []dto.ReportDefinition{
 		Group:       GroupJournals,
 		Kind:        "grid",
 		Description: "Открытые рейсы, ожидающие второго взвешивания: транспорт, груз, вес первого взвешивания.",
-		Formats:     []string{"html"},
+		Formats:     []string{"html", "xlsx"},
 		Params:      periodParams(),
 	},
 	{
@@ -56,7 +56,7 @@ var catalog = []dto.ReportDefinition{
 		Group:       GroupJournals,
 		Kind:        "grid",
 		Description: "Закрытые рейсы с группировкой по номеру транспортного средства и дате.",
-		Formats:     []string{"html"},
+		Formats:     []string{"html", "xlsx"},
 		Params: append(periodParams(), dto.ReportParam{
 			Key: "search", Label: "Номер ТС или пропуска", Type: "text",
 		}),
@@ -67,6 +67,15 @@ var catalog = []dto.ReportDefinition{
 		Group:       GroupJournals,
 		Kind:        "grid",
 		Description: "Пакетная печать ТТН по закрытым рейсам: по документу на страницу, с сохранёнными реквизитами.",
+		Formats:     []string{"html"},
+		Params:      periodParams(),
+	},
+	{
+		Code:        "torg12-batch",
+		Title:       "ТОРГ-12 за период",
+		Group:       GroupJournals,
+		Kind:        "grid",
+		Description: "Пакетная печать товарных накладных по закрытым рейсам: документ на страницу.",
 		Formats:     []string{"html"},
 		Params:      periodParams(),
 	},

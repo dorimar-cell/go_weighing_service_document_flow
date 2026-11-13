@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -362,7 +363,7 @@ func (r *DocumentRepository) SaveTTN(
 		).Scan(&id); err != nil {
 			return nil, fmt.Errorf("insert ttn document: %w", err)
 		}
-		return r.TTN(ctx, doc.SessionID)
+		return r.savedTTN(ctx, doc.SessionID, userID)
 	}
 
 	if _, err := r.pool.Exec(ctx, `
@@ -391,7 +392,7 @@ func (r *DocumentRepository) SaveTTN(
 		return nil, fmt.Errorf("update ttn document: %w", err)
 	}
 
-	return r.TTN(ctx, doc.SessionID)
+	return r.savedTTN(ctx, doc.SessionID, userID)
 }
 
 const torg12Select = `
@@ -502,7 +503,7 @@ func (r *DocumentRepository) SaveTorg12(
 		).Scan(&id); err != nil {
 			return nil, fmt.Errorf("insert torg12 document: %w", err)
 		}
-		return r.Torg12(ctx, doc.SessionID)
+		return r.savedTorg12(ctx, doc.SessionID, userID)
 	}
 
 	if _, err := r.pool.Exec(ctx, `
@@ -525,7 +526,7 @@ func (r *DocumentRepository) SaveTorg12(
 		return nil, fmt.Errorf("update torg12 document: %w", err)
 	}
 
-	return r.Torg12(ctx, doc.SessionID)
+	return r.savedTorg12(ctx, doc.SessionID, userID)
 }
 
 const invoiceSelect = `
@@ -601,7 +602,7 @@ func (r *DocumentRepository) SaveInvoice(
 		).Scan(&id); err != nil {
 			return nil, fmt.Errorf("insert invoice document: %w", err)
 		}
-		return r.Invoice(ctx, doc.SessionID)
+		return r.savedInvoice(ctx, doc.SessionID, userID)
 	}
 
 	if _, err := r.pool.Exec(ctx, `
@@ -617,7 +618,7 @@ func (r *DocumentRepository) SaveInvoice(
 		return nil, fmt.Errorf("update invoice document: %w", err)
 	}
 
-	return r.Invoice(ctx, doc.SessionID)
+	return r.savedInvoice(ctx, doc.SessionID, userID)
 }
 
 func ptrFloat(value float64) *float64 {
@@ -626,4 +627,63 @@ func ptrFloat(value float64) *float64 {
 
 func floatText(value float64) string {
 	return strconv.FormatFloat(value, 'f', -1, 64)
+}
+
+// savedTTN сохраняет факт изменения ТТН и возвращает актуальные реквизиты.
+func (r *DocumentRepository) savedTTN(
+	ctx context.Context,
+	sessionID int64,
+	userID int64,
+) (*dto.TTNDocument, error) {
+	if err := r.auditDocument(ctx, sessionID, "ttn", userID); err != nil {
+		return nil, err
+	}
+	return r.TTN(ctx, sessionID)
+}
+
+// savedTorg12 сохраняет факт изменения ТОРГ-12.
+func (r *DocumentRepository) savedTorg12(
+	ctx context.Context,
+	sessionID int64,
+	userID int64,
+) (*dto.Torg12Document, error) {
+	if err := r.auditDocument(ctx, sessionID, "torg12", userID); err != nil {
+		return nil, err
+	}
+	return r.Torg12(ctx, sessionID)
+}
+
+// savedInvoice сохраняет факт изменения счёта-фактуры.
+func (r *DocumentRepository) savedInvoice(
+	ctx context.Context,
+	sessionID int64,
+	userID int64,
+) (*dto.InvoiceDocument, error) {
+	if err := r.auditDocument(ctx, sessionID, "invoice", userID); err != nil {
+		return nil, err
+	}
+	return r.Invoice(ctx, sessionID)
+}
+
+// auditDocument пишет в историю рейса факт сохранения печатного документа.
+func (r *DocumentRepository) auditDocument(
+	ctx context.Context,
+	sessionID int64,
+	kind string,
+	userID int64,
+) error {
+	payload, err := json.Marshal(map[string]any{"kind": kind})
+	if err != nil {
+		return fmt.Errorf("marshal document audit: %w", err)
+	}
+
+	if _, err := r.pool.Exec(ctx, `
+		INSERT INTO weighing_audit (id_weighing, action, user_id, user_name, payload)
+		VALUES ($1, 'document_saved', $2, (SELECT name FROM dir_users WHERE id = $2), $3::jsonb)`,
+		sessionID, userID, string(payload),
+	); err != nil {
+		return fmt.Errorf("insert document audit: %w", err)
+	}
+
+	return nil
 }

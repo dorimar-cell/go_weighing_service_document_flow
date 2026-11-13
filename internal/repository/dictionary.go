@@ -90,6 +90,52 @@ func (r *DictionaryRepository) List(
 	return &model.DictionaryList{Items: items, Total: total}, nil
 }
 
+// Export возвращает все записи справочника (до 10000) для выгрузки.
+func (r *DictionaryRepository) Export(
+	ctx context.Context,
+	def registry.Dictionary,
+	search string,
+) ([]model.DictionaryItem, error) {
+	where := []string{"deleted_at IS NULL"}
+	args := make([]any, 0, 1)
+
+	if term := strings.TrimSpace(search); term != "" {
+		ors := make([]string, 0, len(def.Fields))
+		for _, field := range def.Fields {
+			if field.Search {
+				ors = append(ors, fmt.Sprintf("%s ILIKE $1", field.Column))
+			}
+		}
+		if len(ors) > 0 {
+			where = append(where, "("+strings.Join(ors, " OR ")+")")
+			args = append(args, "%"+term+"%")
+		}
+	}
+
+	query := "SELECT " + strings.Join(selectExpressions(def), ", ") +
+		" FROM " + def.Table +
+		" WHERE " + strings.Join(where, " AND ") +
+		" ORDER BY " + def.OrderBy +
+		" LIMIT 10000"
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("export %s: %w", def.Table, err)
+	}
+	defer rows.Close()
+
+	items := make([]model.DictionaryItem, 0, 256)
+	for rows.Next() {
+		item, err := scanItem(rows, def)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+
+	return items, rows.Err()
+}
+
 // Create вставляет запись и возвращает её в API-представлении.
 func (r *DictionaryRepository) Create(
 	ctx context.Context,

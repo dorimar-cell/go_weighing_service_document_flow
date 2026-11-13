@@ -57,6 +57,31 @@ func (s *DictionaryService) List(
 	}, nil
 }
 
+// DictionaryExport — данные для выгрузки справочника.
+type DictionaryExport struct {
+	Fields []registry.Field
+	Items  []map[string]any
+}
+
+// Export возвращает все записи справочника для CSV.
+func (s *DictionaryService) Export(
+	ctx context.Context,
+	code string,
+	search string,
+) (*DictionaryExport, error) {
+	def, err := resolve(code)
+	if err != nil {
+		return nil, err
+	}
+
+	items, err := s.repo.Export(ctx, def, strings.TrimSpace(search))
+	if err != nil {
+		return nil, err
+	}
+
+	return &DictionaryExport{Fields: def.Fields, Items: items}, nil
+}
+
 // Create создаёт запись. Обязательные поля проверяются по реестру.
 func (s *DictionaryService) Create(
 	ctx context.Context,
