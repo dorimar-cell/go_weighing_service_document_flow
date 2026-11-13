@@ -31,3 +31,23 @@ type SessionAuditRecord struct {
 	Payload   json.RawMessage `json:"payload"`
 	CreatedAt time.Time       `json:"createdAt"`
 }
+
+// AuditJournalItem — запись журнала аудита с контекстом рейса.
+type AuditJournalItem struct {
+	ID              int64           `json:"id"`
+	SessionID       int64           `json:"sessionId"`
+	Action          string          `json:"action"`
+	UserID          int64           `json:"userId"`
+	UserName        string          `json:"userName"`
+	TransportNumber string          `json:"transportNumber"`
+	Payload         json.RawMessage `json:"payload"`
+	CreatedAt       time.Time       `json:"createdAt"`
+}
+
+// AuditJournalResponse — постраничный журнал аудита.
+type AuditJournalResponse struct {
+	Items    []AuditJournalItem `json:"items"`
+	Page     int                `json:"page"`
+	PageSize int                `json:"pageSize"`
+	Total    int                `json:"total"`
+}

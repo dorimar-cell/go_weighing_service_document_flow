@@ -163,6 +163,15 @@ func ttnBody(details *dto.SessionDetails, doc dto.TTNDocument, settings dto.Repo
 }
 
 func renderTorg12(details *dto.SessionDetails, doc dto.Torg12Document, settings dto.ReportSettings) []byte {
+	number := doc.Name
+	if number == "" {
+		number = "б/н"
+	}
+	return wrapHTML("ТОРГ-12 №"+number, false, torg12Body(details, doc, settings))
+}
+
+// torg12Body — тело ТОРГ-12 без HTML-обёртки.
+func torg12Body(details *dto.SessionDetails, doc dto.Torg12Document, settings dto.ReportSettings) string {
 	session := &details.Session
 
 	quantity := cargoQuantity(session)
@@ -256,7 +265,7 @@ func renderTorg12(details *dto.SessionDetails, doc dto.Torg12Document, settings 
 	body.WriteString("<p class=\"note\">Бланк ТОРГ-12 сформирован веб-системой весовой. " +
 		"Одна строка товара соответствует грузу рейса; цена берётся из справочника груза или реквизитов документа.</p>")
 
-	return wrapHTML("ТОРГ-12 №"+number, false, body.String())
+	return body.String()
 }
 
 func signature(name, position string) string {

@@ -87,6 +87,11 @@ func RenderUploadingCertificate(details *dto.SessionDetails, settings dto.Report
 	return renderUploadingCertificate(details, settings)
 }
 
+// RenderSessionPack собирает комплект документов по рейсу.
+func RenderSessionPack(pack SessionPack, settings dto.ReportSettings) []byte {
+	return renderSessionPack(pack, settings)
+}
+
 // RenderInvoice собирает счёт-фактуру.
 func RenderInvoice(
 	details *dto.SessionDetails,

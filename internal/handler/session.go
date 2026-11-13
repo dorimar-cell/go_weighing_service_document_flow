@@ -463,6 +463,40 @@ func (h *SessionHandler) Permissions(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// AuditJournal: GET /spa/api/weighing/audit
+func (h *SessionHandler) AuditJournal(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permJournal) {
+		return
+	}
+
+	dateFrom, err := parseDateParam(r.URL.Query().Get("dateFrom"), false)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_date", err.Error())
+		return
+	}
+	dateTo, err := parseDateParam(r.URL.Query().Get("dateTo"), true)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_date", err.Error())
+		return
+	}
+
+	result, err := h.service.AuditJournal(
+		r.Context(),
+		r.URL.Query().Get("action"),
+		r.URL.Query().Get("search"),
+		dateFrom,
+		dateTo,
+		parseQueryInt(r, "page", 1),
+		parseQueryInt(r, "pageSize", 25),
+	)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
 // Measurements: GET /spa/api/weighing/sessions/{id}/measurements
 func (h *SessionHandler) Measurements(w http.ResponseWriter, r *http.Request) {
 	if !requirePermission(w, r, permJournal) {

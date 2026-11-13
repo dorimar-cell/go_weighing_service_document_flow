@@ -9,6 +9,15 @@ import (
 
 // renderInvoice собирает счёт-фактуру по рейсу.
 func renderInvoice(details *dto.SessionDetails, doc dto.InvoiceDocument, settings dto.ReportSettings) []byte {
+	number := doc.Name
+	if number == "" {
+		number = "б/н"
+	}
+	return wrapHTML("Счёт-фактура №"+number, false, invoiceBody(details, doc, settings))
+}
+
+// invoiceBody — тело счёта-фактуры без HTML-обёртки.
+func invoiceBody(details *dto.SessionDetails, doc dto.InvoiceDocument, settings dto.ReportSettings) string {
 	session := &details.Session
 
 	quantity := cargoQuantity(session)
@@ -95,7 +104,7 @@ func renderInvoice(details *dto.SessionDetails, doc dto.InvoiceDocument, setting
 	body.WriteString("<p class=\"note\">Счёт-фактура сформирована веб-системой весовой. " +
 		"Суммы рассчитаны по нетто рейса и цене груза; при необходимости скорректируйте реквизиты и цену.</p>")
 
-	return wrapHTML("Счёт-фактура №"+number, false, body.String())
+	return body.String()
 }
 
 func joinRequisites(inn, kpp string) string {

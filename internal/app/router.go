@@ -61,6 +61,7 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 		r.Put("/sessions/{id}/documents/{kind}", handlers.Report.SaveDocument)
 
 		r.Get("/permissions", handlers.Session.Permissions)
+		r.Get("/audit", handlers.Session.AuditJournal)
 
 		r.Get("/settings/app", handlers.Settings.GetApp)
 		r.Put("/settings/app", handlers.Settings.SaveApp)

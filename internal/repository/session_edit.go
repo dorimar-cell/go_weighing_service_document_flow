@@ -71,6 +71,92 @@ func (r *SessionRepository) Audit(ctx context.Context, id int64) ([]dto.SessionA
 	return items, rows.Err()
 }
 
+// AuditJournal возвращает постраничный журнал аудита по всем рейсам.
+func (r *SessionRepository) AuditJournal(
+	ctx context.Context,
+	action string,
+	search string,
+	dateFrom *time.Time,
+	dateTo *time.Time,
+	page int,
+	pageSize int,
+) (*dto.AuditJournalResponse, error) {
+	from := `
+		FROM weighing_audit a
+		LEFT JOIN weighing w ON w.id = a.id_weighing
+		LEFT JOIN weighing_info wi ON wi.id = w.id_weighting_info
+		LEFT JOIN com_dir_transport_driver_trailer c ON c.id = wi.id_com_transport_driver_trailer
+		LEFT JOIN dir_transport t ON t.id = c.id_dir_transport`
+
+	where := []string{"1 = 1"}
+	args := make([]any, 0, 4)
+
+	if action != "" {
+		args = append(args, action)
+		where = append(where, fmt.Sprintf("a.action = $%d", len(args)))
+	}
+	if term := strings.TrimSpace(search); term != "" {
+		args = append(args, "%"+term+"%")
+		position := len(args)
+		where = append(where, fmt.Sprintf(
+			"(COALESCE(t.name, '') ILIKE $%d OR COALESCE(a.user_name, '') ILIKE $%d)",
+			position, position,
+		))
+	}
+	if dateFrom != nil {
+		args = append(args, *dateFrom)
+		where = append(where, fmt.Sprintf("a.created_at >= $%d", len(args)))
+	}
+	if dateTo != nil {
+		args = append(args, *dateTo)
+		where = append(where, fmt.Sprintf("a.created_at < $%d", len(args)))
+	}
+
+	whereSQL := " WHERE " + strings.Join(where, " AND ")
+
+	var total int
+	if err := r.pool.QueryRow(ctx, "SELECT count(*) "+from+whereSQL, args...).Scan(&total); err != nil {
+		return nil, fmt.Errorf("count audit journal: %w", err)
+	}
+
+	args = append(args, pageSize)
+	limitArg := len(args)
+	args = append(args, (page-1)*pageSize)
+	offsetArg := len(args)
+
+	query := `
+		SELECT a.id, a.id_weighing, a.action, a.user_id, COALESCE(a.user_name, ''),
+		       COALESCE(t.name, ''), a.payload, a.created_at ` + from + whereSQL +
+		fmt.Sprintf(" ORDER BY a.created_at DESC, a.id DESC LIMIT $%d OFFSET $%d", limitArg, offsetArg)
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list audit journal: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]dto.AuditJournalItem, 0, pageSize)
+	for rows.Next() {
+		var item dto.AuditJournalItem
+		var payload []byte
+		if err := rows.Scan(
+			&item.ID, &item.SessionID, &item.Action, &item.UserID, &item.UserName,
+			&item.TransportNumber, &payload, &item.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan audit journal: %w", err)
+		}
+		item.Payload = json.RawMessage(payload)
+		items = append(items, item)
+	}
+
+	return &dto.AuditJournalResponse{
+		Items:    items,
+		Page:     page,
+		PageSize: pageSize,
+		Total:    total,
+	}, rows.Err()
+}
+
 // Update правит рейс: транспорт, реквизиты, веса и время взвешиваний.
 func (r *SessionRepository) Update(
 	ctx context.Context,

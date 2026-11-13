@@ -71,7 +71,7 @@ func (s *ReportService) Run(ctx context.Context, code string, query url.Values) 
 		return s.runFirstWeight(ctx, query, format)
 	case "journal-by-transport":
 		return s.runTransportJournal(ctx, query, format)
-	case "ts-card", "talon", "cargo-act", "uploading-certificate", "ttn", "torg12", "invoice":
+	case "ts-card", "talon", "session-pack", "cargo-act", "uploading-certificate", "ttn", "torg12", "invoice":
 		return s.runDocument(ctx, code, query, format)
 	}
 
@@ -502,6 +502,41 @@ func (s *ReportService) runDocument(
 			Name:        fmt.Sprintf("uploading-certificate-%d-%s.html", sessionID, stamp),
 			ContentType: "text/html; charset=utf-8",
 			Data:        reports.RenderUploadingCertificate(details, settings),
+		}, nil
+	case "session-pack":
+		photos := s.inlinePhotos(ctx, sessionID)
+
+		ttnDoc := s.ttnDefaults(details, settings)
+		if saved, err := s.docs.TTN(ctx, sessionID); err != nil {
+			return nil, err
+		} else if saved != nil {
+			ttnDoc = *saved
+		}
+
+		torg12Doc := s.torg12Defaults(details, settings)
+		if saved, err := s.docs.Torg12(ctx, sessionID); err != nil {
+			return nil, err
+		} else if saved != nil {
+			torg12Doc = *saved
+		}
+
+		invoiceDoc := s.invoiceDefaults(details, settings)
+		if saved, err := s.docs.Invoice(ctx, sessionID); err != nil {
+			return nil, err
+		} else if saved != nil {
+			invoiceDoc = *saved
+		}
+
+		return &ReportFile{
+			Name:        fmt.Sprintf("session-pack-%d-%s.html", sessionID, stamp),
+			ContentType: "text/html; charset=utf-8",
+			Data: reports.RenderSessionPack(reports.SessionPack{
+				Details: details,
+				TTN:     ttnDoc,
+				Torg12:  torg12Doc,
+				Invoice: invoiceDoc,
+				Photos:  photos,
+			}, settings),
 		}, nil
 	case "ttn":
 		doc := s.ttnDefaults(details, settings)

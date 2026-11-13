@@ -62,6 +62,19 @@ func renderTalonVariant(details *dto.SessionDetails, settings dto.ReportSettings
 	meta, ok := talonVariants[variant]
 	if !ok {
 		meta = talonVariants["base"]
+	}
+	return wrapHTML(
+		meta.Title+" №"+int64Text(details.Session.ID),
+		false,
+		talonVariantBody(details, settings, variant),
+	)
+}
+
+// talonVariantBody — тело талона без HTML-обёртки.
+func talonVariantBody(details *dto.SessionDetails, settings dto.ReportSettings, variant string) string {
+	meta, ok := talonVariants[variant]
+	if !ok {
+		meta = talonVariants["base"]
 		variant = "base"
 	}
 
@@ -182,5 +195,5 @@ func renderTalonVariant(details *dto.SessionDetails, settings dto.ReportSettings
 	body.WriteString("<p class=\"note\">Талон сформирован веб-системой весовой по данным рейса. " +
 		esc(meta.Note) + "</p>")
 
-	return wrapHTML(meta.Title+" №"+int64Text(session.ID), false, body.String())
+	return body.String()
 }

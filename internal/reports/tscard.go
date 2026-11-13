@@ -13,6 +13,15 @@ type inlinePhoto struct {
 }
 
 func renderTSCard(details *dto.SessionDetails, settings dto.ReportSettings, photos []inlinePhoto) []byte {
+	return wrapHTML(
+		"Карточка ТС №"+int64Text(details.Session.ID),
+		false,
+		tscardBody(details, settings, photos),
+	)
+}
+
+// tscardBody — тело карточки ТС без HTML-обёртки (для комплекта документов).
+func tscardBody(details *dto.SessionDetails, settings dto.ReportSettings, photos []inlinePhoto) string {
 	session := &details.Session
 	brutto, tare := bruttoTare(session)
 
@@ -93,7 +102,7 @@ func renderTSCard(details *dto.SessionDetails, settings dto.ReportSettings, phot
 	body.WriteString("<p class=\"note\">Карточка сформирована веб-системой весовой по данным рейса и " +
 		"подписанных измерений Station Agent.</p>")
 
-	return wrapHTML("Карточка ТС №"+int64Text(session.ID), false, body.String())
+	return body.String()
 }
 
 func counterpartyText(details *dto.SessionDetails) string {

@@ -185,6 +185,27 @@ func (s *SessionService) Cancel(ctx context.Context, id int64, userID int64) err
 	return s.repo.Cancel(ctx, id, userID)
 }
 
+// AuditJournal возвращает журнал аудита по всем рейсам.
+func (s *SessionService) AuditJournal(
+	ctx context.Context,
+	action string,
+	search string,
+	dateFrom *time.Time,
+	dateTo *time.Time,
+	page int,
+	pageSize int,
+) (*dto.AuditJournalResponse, error) {
+	action = strings.TrimSpace(action)
+	switch action {
+	case "", "created", "closed", "flow_closed", "cancelled", "edited":
+	default:
+		return nil, &ValidationError{Message: fmt.Sprintf("Неизвестное действие: %s", action)}
+	}
+
+	page, pageSize = normalizePaging(page, pageSize)
+	return s.repo.AuditJournal(ctx, action, strings.TrimSpace(search), dateFrom, dateTo, page, pageSize)
+}
+
 func (s *SessionService) Measurements(ctx context.Context, id int64) ([]dto.MeasurementRecord, error) {
 	if id <= 0 {
 		return nil, &ValidationError{Message: "Некорректный идентификатор рейса"}

@@ -125,6 +125,15 @@ var catalog = []dto.ReportDefinition{
 		Params:      sessionParams(),
 	},
 	{
+		Code:        "session-pack",
+		Title:       "Комплект документов",
+		Group:       GroupDocuments,
+		Kind:        "document",
+		Description: "Карточка ТС, талон, ТТН, ТОРГ-12 и счёт-фактура одним файлом с разбивкой по страницам.",
+		Formats:     []string{"html"},
+		Params:      sessionParams(),
+	},
+	{
 		Code:        "talon",
 		Title:       "Талон взвешивания",
 		Group:       GroupDocuments,
