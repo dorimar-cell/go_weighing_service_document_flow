@@ -40,6 +40,15 @@ func RenderTalon(details *dto.SessionDetails, settings dto.ReportSettings) []byt
 	return renderTalon(details, settings)
 }
 
+// RenderTalonVariant собирает талон в выбранном варианте бланка.
+func RenderTalonVariant(
+	details *dto.SessionDetails,
+	settings dto.ReportSettings,
+	variant string,
+) []byte {
+	return renderTalonVariant(details, settings, variant)
+}
+
 // RenderTalonsBatch собирает пакет талонов за период.
 func RenderTalonsBatch(
 	items []dto.SessionDTO,

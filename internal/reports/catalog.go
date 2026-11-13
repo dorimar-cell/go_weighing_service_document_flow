@@ -129,9 +129,19 @@ var catalog = []dto.ReportDefinition{
 		Title:       "Талон взвешивания",
 		Group:       GroupDocuments,
 		Kind:        "document",
-		Description: "Отвесной талон: ТС, прицеп, водитель, груз, брутто/тара/нетто и подписи.",
+		Description: "Отвесной талон: базовый, ВЗРМ, приход, продажа, второе взвешивание, дефектный.",
 		Formats:     []string{"html"},
-		Params:      sessionParams(),
+		Params: append(sessionParams(), dto.ReportParam{
+			Key: "variant", Label: "Вариант бланка", Type: "select", Default: "base",
+			Options: []dto.ReportParamOption{
+				{Value: "base", Label: "Базовый"},
+				{Value: "vzrm", Label: "ВЗРМ"},
+				{Value: "tula-prihod", Label: "Приход"},
+				{Value: "tula-prodazha", Label: "Продажа"},
+				{Value: "tula-second", Label: "Второе взвешивание"},
+				{Value: "tula-defect", Label: "Дефектный"},
+			},
+		}),
 	},
 	{
 		Code:        "cargo-act",

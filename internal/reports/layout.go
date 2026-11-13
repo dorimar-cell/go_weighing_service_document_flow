@@ -196,6 +196,20 @@ func int64Text(value int64) string {
 	return strconv.FormatInt(value, 10)
 }
 
+func weightOrZero(value *float64) float64 {
+	if value == nil {
+		return 0
+	}
+	return *value
+}
+
+func nettoValue(session *dto.SessionDTO) float64 {
+	if session.NetWeightKg == nil {
+		return 0
+	}
+	return *session.NetWeightKg
+}
+
 // bruttoTare возвращает брутто и тару по легаси-правилу: большее — брутто.
 func bruttoTare(session *dto.SessionDTO) (brutto float64, tare float64) {
 	if session.SecondWeightKg == nil {

@@ -479,10 +479,17 @@ func (s *ReportService) runDocument(
 			Data:        reports.RenderTSCard(details, settings, photos),
 		}, nil
 	case "talon":
+		variant := strings.TrimSpace(query.Get("variant"))
+		if variant == "" {
+			variant = "base"
+		}
+		if !reports.TalonVariantValid(variant) {
+			return nil, &ValidationError{Message: "Неизвестный вариант талона: " + variant}
+		}
 		return &ReportFile{
-			Name:        fmt.Sprintf("talon-%d-%s.html", sessionID, stamp),
+			Name:        fmt.Sprintf("talon-%s-%d-%s.html", variant, sessionID, stamp),
 			ContentType: "text/html; charset=utf-8",
-			Data:        reports.RenderTalon(details, settings),
+			Data:        reports.RenderTalonVariant(details, settings, variant),
 		}, nil
 	case "cargo-act":
 		return &ReportFile{
