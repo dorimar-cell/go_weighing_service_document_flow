@@ -23,6 +23,7 @@ type Config struct {
 	AgentToken       string
 	PhotoDir         string
 	ReportTimezone   string
+	ReportCacheTTL   int
 	CORSOrigins      []string
 	DBMaxConns       int32
 }
@@ -42,6 +43,7 @@ func Load() *Config {
 		AgentToken:       getEnv("WEIGHING_AGENT_TOKEN", "dev-token"),
 		PhotoDir:         getEnv("WEIGHING_PHOTO_DIR", "data/photos"),
 		ReportTimezone:   getEnv("WEIGHING_TZ", "Europe/Moscow"),
+		ReportCacheTTL:   getEnvAsInt("WEIGHING_REPORT_CACHE_TTL_SECONDS", 60),
 		CORSOrigins:      splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3001")),
 		DBMaxConns:       int32(getEnvAsInt("DB_MAX_CONNS", 10)),
 	}

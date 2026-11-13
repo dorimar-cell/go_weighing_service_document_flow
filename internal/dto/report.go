@@ -35,6 +35,30 @@ type ReportCatalogResponse struct {
 	Items []ReportDefinition `json:"items"`
 }
 
+// ReportJob — асинхронное задание генерации отчёта.
+type ReportJob struct {
+	ID          int64      `json:"id"`
+	Code        string     `json:"code"`
+	Format      string     `json:"format"`
+	Status      string     `json:"status"`
+	Error       string     `json:"error,omitempty"`
+	FileName    string     `json:"fileName,omitempty"`
+	ContentType string     `json:"contentType,omitempty"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	StartedAt   *time.Time `json:"startedAt"`
+	FinishedAt  *time.Time `json:"finishedAt"`
+}
+
+// CreateReportJobResponse — ответ постановки задания.
+type CreateReportJobResponse struct {
+	Job ReportJob `json:"job"`
+}
+
+// ReportJobsResponse — последние задания отчётов.
+type ReportJobsResponse struct {
+	Items []ReportJob `json:"items"`
+}
+
 // ReportSettings — реквизиты организации для бланков.
 type ReportSettings struct {
 	OrganizationName string `json:"organizationName"`

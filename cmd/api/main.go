@@ -44,7 +44,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	auth, err := middleware.NewAuth(cfg.AuthMode, cfg.JWTPublicKeyPath, middleware.NewUserStore(pool))
+	loginRepo := repository.NewLoginAuditRepository(pool)
+
+	auth, err := middleware.NewAuth(
+		cfg.AuthMode, cfg.JWTPublicKeyPath, middleware.NewUserStore(pool), loginRepo,
+	)
 	if err != nil {
 		slog.Error("auth init failed", "error", err)
 		os.Exit(1)
@@ -90,8 +94,13 @@ func main() {
 	photoHandler := handler.NewPhotoHandler(photoService)
 
 	documentRepo := repository.NewDocumentRepository(pool)
-	reportService := service.NewReportService(sessionRepo, documentRepo, photoRepo, cfg.PhotoDir)
+	reportJobRepo := repository.NewReportJobRepository(pool)
+	reportService := service.NewReportService(
+		sessionRepo, documentRepo, photoRepo, reportJobRepo, cfg.PhotoDir,
+		time.Duration(cfg.ReportCacheTTL)*time.Second,
+	)
 	reportHandler := handler.NewReportHandler(reportService)
+	loginAuditHandler := handler.NewLoginAuditHandler(loginRepo)
 
 	router := app.NewRouter(
 		app.Handlers{
@@ -106,6 +115,7 @@ func main() {
 			Health:     healthHandler,
 			Station:    stationHandler,
 			Extra:      extraHandler,
+			LoginAudit: loginAuditHandler,
 			Metrics:    metricsHandler,
 		},
 		auth,

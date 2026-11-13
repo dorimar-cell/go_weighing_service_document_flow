@@ -25,6 +25,7 @@ type ReportFile struct {
 	Name        string
 	ContentType string
 	Data        []byte
+	Cached      bool
 }
 
 // ReportService — каталог отчётов, рендер бланков и реквизиты организации.
@@ -32,16 +33,23 @@ type ReportService struct {
 	sessions *repository.SessionRepository
 	docs     *repository.DocumentRepository
 	photos   *repository.PhotoRepository
+	jobs     *repository.ReportJobRepository
 	photoDir string
+	cacheTTL time.Duration
 }
 
 func NewReportService(
 	sessions *repository.SessionRepository,
 	docs *repository.DocumentRepository,
 	photos *repository.PhotoRepository,
+	jobs *repository.ReportJobRepository,
 	photoDir string,
+	cacheTTL time.Duration,
 ) *ReportService {
-	return &ReportService{sessions: sessions, docs: docs, photos: photos, photoDir: photoDir}
+	return &ReportService{
+		sessions: sessions, docs: docs, photos: photos, jobs: jobs,
+		photoDir: photoDir, cacheTTL: cacheTTL,
+	}
 }
 
 // Catalog возвращает доступные отчёты.
@@ -49,7 +57,7 @@ func (s *ReportService) Catalog() []dto.ReportDefinition {
 	return reports.Catalog()
 }
 
-// Run формирует отчёт по коду и параметрам.
+// Run формирует отчёт по коду и параметрам. Результат на короткое время кэшируется.
 func (s *ReportService) Run(ctx context.Context, code string, query url.Values) (*ReportFile, error) {
 	if _, ok := reports.Definition(code); !ok {
 		return nil, &ValidationError{Message: "Отчёт не найден"}
@@ -60,6 +68,38 @@ func (s *ReportService) Run(ctx context.Context, code string, query url.Values) 
 		format = "html"
 	}
 
+	useCache := s.jobs != nil && s.cacheTTL > 0 && query.Get("nocache") != "1"
+	cacheKey := ""
+	if useCache {
+		cacheKey = reportCacheKey(code, format, query)
+		if cached, err := s.jobs.CacheGet(ctx, cacheKey); err == nil && cached != nil {
+			return &ReportFile{
+				Name: cached.FileName, ContentType: cached.ContentType,
+				Data: cached.Data, Cached: true,
+			}, nil
+		}
+	}
+
+	file, err := s.generate(ctx, code, query, format)
+	if err != nil {
+		return nil, err
+	}
+
+	if useCache {
+		_ = s.jobs.CachePut(
+			ctx, cacheKey, code, format, map[string][]string(query),
+			file.Name, file.ContentType, file.Data, s.cacheTTL,
+		)
+	}
+	return file, nil
+}
+
+func (s *ReportService) generate(
+	ctx context.Context,
+	code string,
+	query url.Values,
+	format string,
+) (*ReportFile, error) {
 	switch code {
 	case "journal":
 		return s.runJournal(ctx, query, format)

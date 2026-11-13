@@ -22,6 +22,7 @@ type Handlers struct {
 	Health     *handler.HealthHandler
 	Station    *handler.StationHandler
 	Extra      *handler.SettingsExtraHandler
+	LoginAudit *handler.LoginAuditHandler
 	Metrics    *handler.MetricsHandler
 }
 
@@ -85,6 +86,7 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 		r.Put("/settings/profiles/{scope}", handlers.Extra.SaveProfileDraft)
 		r.Post("/settings/profiles/{scope}/apply", handlers.Extra.ApplyProfile)
 		r.Get("/settings/agent-config", handlers.Extra.AgentConfig)
+		r.Get("/login-audit", handlers.LoginAudit.List)
 
 		r.Get("/rbac", handlers.RBAC.Matrix)
 		r.Put("/rbac/groups/{id}", handlers.RBAC.SaveGroup)
@@ -113,6 +115,10 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 		r.Get("/reports", handlers.Report.Catalog)
 		r.Get("/reports/settings", handlers.Report.GetSettings)
 		r.Put("/reports/settings", handlers.Report.SaveSettings)
+		r.Get("/reports/jobs", handlers.Report.Jobs)
+		r.Get("/reports/jobs/{id}", handlers.Report.Job)
+		r.Get("/reports/jobs/{id}/download", handlers.Report.JobDownload)
+		r.Post("/reports/{code}/jobs", handlers.Report.CreateJob)
 		r.Get("/reports/{code}/run", handlers.Report.Run)
 
 		r.Post("/passes", handlers.Pass.Create)

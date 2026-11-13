@@ -53,6 +53,78 @@ func (h *ReportHandler) Run(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", file.ContentType)
 	w.Header().Set("Content-Disposition", disposition+`; filename="`+file.Name+`"`)
 	w.Header().Set("Cache-Control", "no-store")
+	if file.Cached {
+		w.Header().Set("X-Report-Cache", "hit")
+	} else {
+		w.Header().Set("X-Report-Cache", "miss")
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(file.Data)
+}
+
+// CreateJob: POST /spa/api/weighing/reports/{code}/jobs
+func (h *ReportHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permJournal) {
+		return
+	}
+	code := strings.TrimSpace(chi.URLParam(r, "code"))
+	job, err := h.service.EnqueueReport(r.Context(), code, r.URL.Query(), currentUserID(r))
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, dto.CreateReportJobResponse{Job: *job})
+}
+
+// Jobs: GET /spa/api/weighing/reports/jobs
+func (h *ReportHandler) Jobs(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permJournal) {
+		return
+	}
+	items, err := h.service.ReportJobs(r.Context(), parseQueryInt(r, "limit", 20))
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, dto.ReportJobsResponse{Items: items})
+}
+
+// Job: GET /spa/api/weighing/reports/jobs/{id}
+func (h *ReportHandler) Job(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permJournal) {
+		return
+	}
+	id, err := parseNestedID(r, "id")
+	if err != nil || id <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid_id", "Некорректное задание")
+		return
+	}
+	job, err := h.service.ReportJob(r.Context(), id)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, job)
+}
+
+// JobDownload: GET /spa/api/weighing/reports/jobs/{id}/download
+func (h *ReportHandler) JobDownload(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permJournal) {
+		return
+	}
+	id, err := parseNestedID(r, "id")
+	if err != nil || id <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid_id", "Некорректное задание")
+		return
+	}
+	file, err := h.service.ReportJobFile(r.Context(), id)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", file.ContentType)
+	w.Header().Set("Content-Disposition", `attachment; filename="`+file.Name+`"`)
+	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(file.Data)
 }
