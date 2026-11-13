@@ -63,6 +63,22 @@ type DictionaryExport struct {
 	Items  []map[string]any
 }
 
+func (s *DictionaryService) Get(ctx context.Context, code string, id int64) (map[string]any, error) {
+	def, err := resolve(code)
+	if err != nil {
+		return nil, err
+	}
+	return s.repo.Get(ctx, def, id)
+}
+
+func (s *DictionaryService) AuditExport(
+	ctx context.Context,
+	code string,
+	action string,
+) ([]dto.DictionaryAuditItem, error) {
+	return s.repo.AuditExport(ctx, code, action)
+}
+
 // AuditList возвращает журнал аудита справочников.
 func (s *DictionaryService) AuditList(
 	ctx context.Context,
@@ -93,20 +109,34 @@ func (s *DictionaryService) ImportCSV(
 	code string,
 	rows []map[string]any,
 	userID int64,
-) (int, []string, error) {
+) (int, int, []string, error) {
 	if len(rows) > 5000 {
-		return 0, nil, &ValidationError{Message: "Слишком много строк для импорта (макс. 5000)"}
+		return 0, 0, nil, &ValidationError{Message: "Слишком много строк для импорта (макс. 5000)"}
 	}
 
 	def, err := resolve(code)
 	if err != nil {
-		return 0, nil, err
+		return 0, 0, nil, err
 	}
 
-	imported := 0
+	created := 0
+	updated := 0
 	errorsList := make([]string, 0)
 
 	for index, row := range rows {
+		recordID := int64(0)
+		if value, ok := row["id"]; ok {
+			switch typed := value.(type) {
+			case string:
+				if parsed, parseErr := strconv.ParseInt(strings.TrimSpace(typed), 10, 64); parseErr == nil {
+					recordID = parsed
+				}
+			case float64:
+				recordID = int64(typed)
+			}
+			delete(row, "id")
+		}
+
 		raw := make(map[string]json.RawMessage, len(row))
 		for key, value := range row {
 			encoded, err := json.Marshal(value)
@@ -117,28 +147,37 @@ func (s *DictionaryService) ImportCSV(
 			raw[key] = encoded
 		}
 
-		item, err := s.Create(ctx, code, raw)
-		if err != nil {
-			errorsList = append(errorsList, fmt.Sprintf("строка %d: %v", index+2, err))
-			continue
-		}
-
-		imported++
-		recordID := int64(0)
-		if value, ok := item["id"]; ok {
-			switch typed := value.(type) {
-			case int64:
-				recordID = typed
-			case int32:
-				recordID = int64(typed)
-			case float64:
-				recordID = int64(typed)
+		action := "imported"
+		if recordID > 0 {
+			if _, err := s.Update(ctx, code, recordID, raw); err != nil {
+				errorsList = append(errorsList, fmt.Sprintf("строка %d: %v", index+2, err))
+				continue
+			}
+			updated++
+			action = "imported_updated"
+		} else {
+			item, err := s.Create(ctx, code, raw)
+			if err != nil {
+				errorsList = append(errorsList, fmt.Sprintf("строка %d: %v", index+2, err))
+				continue
+			}
+			created++
+			if value, ok := item["id"]; ok {
+				switch typed := value.(type) {
+				case int64:
+					recordID = typed
+				case int32:
+					recordID = int64(typed)
+				case float64:
+					recordID = int64(typed)
+				}
 			}
 		}
-		_ = s.repo.Audit(ctx, def.Code, recordID, "imported", userID, item)
+
+		_ = s.repo.Audit(ctx, def.Code, recordID, action, userID, row)
 	}
 
-	return imported, errorsList, nil
+	return created, updated, errorsList, nil
 }
 
 // Export возвращает все записи справочника для CSV.

@@ -188,6 +188,17 @@ func (s *SessionService) Cancel(ctx context.Context, id int64, userID int64) err
 	return s.repo.Cancel(ctx, id, userID)
 }
 
+// AuditExport возвращает все записи журнала аудита для CSV.
+func (s *SessionService) AuditExport(
+	ctx context.Context,
+	action string,
+	search string,
+	dateFrom *time.Time,
+	dateTo *time.Time,
+) ([]dto.AuditJournalItem, error) {
+	return s.repo.AuditExport(ctx, action, search, dateFrom, dateTo)
+}
+
 // Bulk выполняет массовую отмену или восстановление рейсов.
 func (s *SessionService) Bulk(
 	ctx context.Context,

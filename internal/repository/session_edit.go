@@ -203,6 +203,71 @@ func (r *SessionRepository) Restore(ctx context.Context, id int64, userID int64)
 	return tx.Commit(ctx)
 }
 
+// AuditExport возвращает все записи аудита по фильтру (для CSV).
+func (r *SessionRepository) AuditExport(
+	ctx context.Context,
+	action string,
+	search string,
+	dateFrom *time.Time,
+	dateTo *time.Time,
+) ([]dto.AuditJournalItem, error) {
+	from := `
+		FROM weighing_audit a
+		LEFT JOIN weighing w ON w.id = a.id_weighing
+		LEFT JOIN weighing_info wi ON wi.id = w.id_weighting_info
+		LEFT JOIN com_dir_transport_driver_trailer c ON c.id = wi.id_com_transport_driver_trailer
+		LEFT JOIN dir_transport t ON t.id = c.id_dir_transport`
+	where := []string{"1 = 1"}
+	args := make([]any, 0, 4)
+	if action != "" {
+		args = append(args, action)
+		where = append(where, fmt.Sprintf("a.action = $%d", len(args)))
+	}
+	if term := strings.TrimSpace(search); term != "" {
+		args = append(args, "%"+term+"%")
+		position := len(args)
+		where = append(where, fmt.Sprintf(
+			"(COALESCE(t.name, '') ILIKE $%d OR COALESCE(a.user_name, '') ILIKE $%d)",
+			position, position,
+		))
+	}
+	if dateFrom != nil {
+		args = append(args, *dateFrom)
+		where = append(where, fmt.Sprintf("a.created_at >= $%d", len(args)))
+	}
+	if dateTo != nil {
+		args = append(args, *dateTo)
+		where = append(where, fmt.Sprintf("a.created_at < $%d", len(args)))
+	}
+
+	query := `
+		SELECT a.id, a.id_weighing, a.action, a.user_id, COALESCE(a.user_name, ''),
+		       COALESCE(t.name, ''), a.payload, a.created_at ` + from +
+		" WHERE " + strings.Join(where, " AND ") +
+		" ORDER BY a.created_at DESC, a.id DESC LIMIT 10000"
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("export audit journal: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]dto.AuditJournalItem, 0, 256)
+	for rows.Next() {
+		var item dto.AuditJournalItem
+		var payload []byte
+		if err := rows.Scan(
+			&item.ID, &item.SessionID, &item.Action, &item.UserID, &item.UserName,
+			&item.TransportNumber, &payload, &item.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan audit export: %w", err)
+		}
+		item.Payload = json.RawMessage(payload)
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
 // Update правит рейс: транспорт, реквизиты, веса и время взвешиваний.
 func (r *SessionRepository) Update(
 	ctx context.Context,

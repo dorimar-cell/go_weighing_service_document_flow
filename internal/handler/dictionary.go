@@ -82,13 +82,19 @@ func (h *DictionaryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	oldItem, _ := h.service.Get(r.Context(), code, id)
+
 	item, err := h.service.Update(r.Context(), code, id, raw)
 	if err != nil {
 		h.handleError(w, err)
 		return
 	}
 
-	_ = h.service.Audit(r.Context(), code, id, "updated", currentUserID(r), item)
+	payload := any(item)
+	if oldItem != nil {
+		payload = map[string]any{"changes": diffItems(oldItem, item)}
+	}
+	_ = h.service.Audit(r.Context(), code, id, "updated", currentUserID(r), payload)
 	writeJSON(w, http.StatusOK, item)
 }
 
@@ -101,12 +107,18 @@ func (h *DictionaryHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	existing, _ := h.service.Get(r.Context(), code, id)
+
 	if err := h.service.Delete(r.Context(), code, id); err != nil {
 		h.handleError(w, err)
 		return
 	}
 
-	_ = h.service.Audit(r.Context(), code, id, "deleted", currentUserID(r), nil)
+	payload := any(nil)
+	if existing != nil {
+		payload = map[string]any{"record": existing}
+	}
+	_ = h.service.Audit(r.Context(), code, id, "deleted", currentUserID(r), payload)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -126,6 +138,44 @@ func (h *DictionaryHandler) Restore(w http.ResponseWriter, r *http.Request) {
 
 	_ = h.service.Audit(r.Context(), code, id, "restored", currentUserID(r), nil)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// AuditExport: GET /spa/api/weighing/dictionary-audit/export.csv
+func (h *DictionaryHandler) AuditExport(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permSettings) {
+		return
+	}
+
+	items, err := h.service.AuditExport(
+		r.Context(),
+		r.URL.Query().Get("code"),
+		r.URL.Query().Get("action"),
+	)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(
+		`attachment; filename="dictionary-audit-%s.csv"`, time.Now().Format("20060102-150405"),
+	))
+	_, _ = w.Write([]byte{0xEF, 0xBB, 0xBF})
+
+	writer := csv.NewWriter(w)
+	writer.Comma = ';'
+	_ = writer.Write([]string{"ID", "Дата", "Справочник", "Запись", "Действие", "Пользователь"})
+	for _, item := range items {
+		_ = writer.Write([]string{
+			strconv.FormatInt(item.ID, 10),
+			item.CreatedAt.Format("02.01.2006 15:04"),
+			item.Code,
+			strconv.FormatInt(item.RecordID, 10),
+			item.Action,
+			item.UserName,
+		})
+	}
+	writer.Flush()
 }
 
 // AuditList: GET /spa/api/weighing/dictionary-audit?code&action&page&pageSize
@@ -211,6 +261,10 @@ func (h *DictionaryHandler) Import(w http.ResponseWriter, r *http.Request) {
 	headerIndexes := make(map[int]string, len(records[0]))
 	for index, header := range records[0] {
 		name := strings.TrimSpace(header)
+		if strings.EqualFold(name, "ID") {
+			headerIndexes[index] = "id"
+			continue
+		}
 		for _, field := range export.Fields {
 			if strings.EqualFold(name, field.Key) || strings.EqualFold(name, registry.FieldLabel(field.Key)) {
 				headerIndexes[index] = field.Key
@@ -247,7 +301,9 @@ func (h *DictionaryHandler) Import(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	imported, importErrors, err := h.service.ImportCSV(r.Context(), code, rows, currentUserID(r))
+	imported, updated, importErrors, err := h.service.ImportCSV(
+		r.Context(), code, rows, currentUserID(r),
+	)
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -255,9 +311,27 @@ func (h *DictionaryHandler) Import(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"imported": imported,
-		"skipped":  len(rows) - imported,
+		"updated":  updated,
+		"skipped":  len(rows) - imported - updated,
 		"errors":   importErrors,
 	})
+}
+
+func diffItems(oldItem, newItem map[string]any) map[string]map[string]any {
+	changes := make(map[string]map[string]any)
+	for key, newValue := range newItem {
+		if key == "id" {
+			continue
+		}
+		oldValue, ok := oldItem[key]
+		if !ok {
+			continue
+		}
+		if fmt.Sprint(oldValue) != fmt.Sprint(newValue) {
+			changes[key] = map[string]any{"old": oldValue, "new": newValue}
+		}
+	}
+	return changes
 }
 
 func mapID(item map[string]any) int64 {

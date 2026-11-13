@@ -1,0 +1,267 @@
+openapi: 3.0.3
+info:
+  title: Weighing Service API
+  version: 1.0.0
+  description: >
+    REST API весовой (`/spa/api/weighing`). Авторизация — JWT портала
+    (`AUTH_MODE=jwt`) или dev-пользователь (`AUTH_MODE=dev`).
+servers:
+  - url: http://localhost:8089
+paths:
+  /healthz:
+    get:
+      summary: Health/readiness
+      responses:
+        '200': { description: OK }
+        '503': { description: Database unavailable }
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      responses:
+        '200': { description: Text metrics }
+  /spa/api/weighing/permissions:
+    get:
+      summary: Permissions of the current user
+      responses:
+        '200': { description: isRoot + W-codes }
+  /spa/api/weighing/dictionaries/{code}:
+    get:
+      summary: List dictionary records
+      parameters:
+        - { in: path, name: code, required: true, schema: { type: string } }
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: pageSize, schema: { type: integer, default: 25 } }
+        - { in: query, name: search, schema: { type: string } }
+      responses:
+        '200': { description: Page of records }
+    post:
+      summary: Create dictionary record
+      parameters:
+        - { in: path, name: code, required: true, schema: { type: string } }
+      responses:
+        '201': { description: Created }
+  /spa/api/weighing/dictionaries/{code}/{id}:
+    patch:
+      summary: Update dictionary record
+      parameters:
+        - { in: path, name: code, required: true, schema: { type: string } }
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Updated }
+    delete:
+      summary: Soft delete dictionary record
+      parameters:
+        - { in: path, name: code, required: true, schema: { type: string } }
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '204': { description: Deleted }
+  /spa/api/weighing/dictionaries/{code}/export.csv:
+    get:
+      summary: Export dictionary to CSV
+      parameters:
+        - { in: path, name: code, required: true, schema: { type: string } }
+        - { in: query, name: search, schema: { type: string } }
+      responses:
+        '200': { description: CSV }
+  /spa/api/weighing/dictionaries/{code}/import.csv:
+    post:
+      summary: Import dictionary from CSV
+      parameters:
+        - { in: path, name: code, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '200': { description: imported/updated/skipped/errors }
+  /spa/api/weighing/dictionary-audit:
+    get:
+      summary: Dictionary audit journal
+      parameters:
+        - { in: query, name: code, schema: { type: string } }
+        - { in: query, name: action, schema: { type: string } }
+        - { in: query, name: page, schema: { type: integer } }
+        - { in: query, name: pageSize, schema: { type: integer } }
+      responses:
+        '200': { description: Page of audit records }
+  /spa/api/weighing/sessions:
+    get:
+      summary: Session journal
+      parameters:
+        - { in: query, name: status, schema: { type: string, enum: [all, open, closed, cancelled] } }
+        - { in: query, name: search, schema: { type: string } }
+        - { in: query, name: dateFrom, schema: { type: string, format: date } }
+        - { in: query, name: dateTo, schema: { type: string, format: date } }
+        - { in: query, name: sort, schema: { type: string, enum: [created, date, transport, firstWeight, netto] } }
+        - { in: query, name: dir, schema: { type: string, enum: [asc, desc] } }
+        - { in: query, name: page, schema: { type: integer } }
+        - { in: query, name: pageSize, schema: { type: integer } }
+      responses:
+        '200': { description: Page of sessions }
+    post:
+      summary: Create first weighing (signed measurement or manualWeightKg)
+      responses:
+        '201': { description: Session }
+  /spa/api/weighing/sessions/flow:
+    post:
+      summary: Flow weighing (gross + manual tare)
+      responses:
+        '201': { description: Session }
+  /spa/api/weighing/sessions/{id}:
+    get:
+      summary: Session card
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Session }
+    patch:
+      summary: Edit session (W008)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Updated session }
+  /spa/api/weighing/sessions/{id}/second:
+    post:
+      summary: Close session by second weighing
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Closed session }
+  /spa/api/weighing/sessions/{id}/cancel:
+    post:
+      summary: Cancel open session (W004)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '204': { description: Cancelled }
+  /spa/api/weighing/sessions/{id}/restore:
+    post:
+      summary: Restore cancelled session (W008)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '204': { description: Restored }
+  /spa/api/weighing/sessions/bulk:
+    post:
+      summary: Bulk cancel/restore
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, ids]
+              properties:
+                action: { type: string, enum: [cancel, restore] }
+                ids:
+                  type: array
+                  items: { type: integer }
+      responses:
+        '200': { description: updated + failed[] }
+  /spa/api/weighing/sessions/{id}/audit:
+    get:
+      summary: Session change history
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Audit records }
+  /spa/api/weighing/sessions/{id}/measurements:
+    get:
+      summary: Signed measurements
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Measurements }
+  /spa/api/weighing/audit:
+    get:
+      summary: Audit journal (sessions)
+      parameters:
+        - { in: query, name: action, schema: { type: string } }
+        - { in: query, name: search, schema: { type: string } }
+        - { in: query, name: dateFrom, schema: { type: string, format: date } }
+        - { in: query, name: dateTo, schema: { type: string, format: date } }
+        - { in: query, name: page, schema: { type: integer } }
+        - { in: query, name: pageSize, schema: { type: integer } }
+      responses:
+        '200': { description: Page of audit records }
+  /spa/api/weighing/audit/export.csv:
+    get:
+      summary: Audit journal CSV
+      responses:
+        '200': { description: CSV }
+  /spa/api/weighing/journal/preferences:
+    get:
+      summary: Current user journal filters and columns
+      responses:
+        '200': { description: Preferences }
+    put:
+      summary: Save current user journal preferences
+      responses:
+        '200': { description: Preferences }
+  /spa/api/weighing/users:
+    get:
+      summary: Portal users (W009)
+      responses:
+        '200': { description: Users }
+  /spa/api/weighing/users/{id}:
+    put:
+      summary: Change user group/active flag (W009)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '204': { description: Updated }
+  /spa/api/weighing/users/{id}/weight-room:
+    put:
+      summary: Bind user to a weight room (W009)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '204': { description: Updated }
+  /spa/api/weighing/stations:
+    get:
+      summary: Weight rooms and terminals (W009)
+      responses:
+        '200': { description: Stations }
+  /spa/api/weighing/stations/{id}:
+    put:
+      summary: Save terminal settings (W009)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Stations }
+  /spa/api/weighing/rbac:
+    get:
+      summary: Permission matrix (W009)
+      responses:
+        '200': { description: Permissions and groups }
+  /spa/api/weighing/rbac/groups/{id}:
+    put:
+      summary: Save group permissions (W009)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Permission matrix }
+  /spa/api/weighing/settings/app:
+    get:
+      summary: Field settings
+      responses:
+        '200': { description: Settings }
+    put:
+      summary: Save field settings (W009)
+      responses:
+        '200': { description: Settings }
+  /spa/api/weighing/reports:
+    get:
+      summary: Report catalog
+      responses:
+        '200': { description: Reports }
+  /spa/api/weighing/reports/{code}/run:
+    get:
+      summary: Run report (html|xlsx)
+      parameters:
+        - { in: path, name: code, required: true, schema: { type: string } }
+        - { in: query, name: format, schema: { type: string, enum: [html, xlsx] } }
+      responses:
+        '200': { description: File }

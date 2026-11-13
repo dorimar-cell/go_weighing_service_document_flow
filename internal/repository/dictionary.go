@@ -92,6 +92,31 @@ func (r *DictionaryRepository) List(
 	return &model.DictionaryList{Items: items, Total: total}, nil
 }
 
+// Get возвращает запись по id.
+func (r *DictionaryRepository) Get(
+	ctx context.Context,
+	def registry.Dictionary,
+	id int64,
+) (model.DictionaryItem, error) {
+	rows, err := r.pool.Query(ctx,
+		"SELECT "+strings.Join(selectExpressions(def), ", ")+" FROM "+def.Table+" WHERE id = $1",
+		id)
+	if err != nil {
+		return nil, fmt.Errorf("get %s: %w", def.Table, err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		return nil, ErrNotFound
+	}
+
+	item, err := scanItem(rows, def)
+	if err != nil {
+		return nil, fmt.Errorf("scan %s: %w", def.Table, err)
+	}
+	return item, nil
+}
+
 // Audit пишет действие над справочником.
 func (r *DictionaryRepository) Audit(
 	ctx context.Context,
@@ -175,6 +200,49 @@ func (r *DictionaryRepository) AuditList(
 	return &dto.DictionaryAuditResponse{
 		Items: items, Page: page, PageSize: pageSize, Total: total,
 	}, rows.Err()
+}
+
+// AuditExport возвращает все записи аудита справочников для CSV.
+func (r *DictionaryRepository) AuditExport(
+	ctx context.Context,
+	code string,
+	action string,
+) ([]dto.DictionaryAuditItem, error) {
+	where := []string{"1 = 1"}
+	args := make([]any, 0, 2)
+	if strings.TrimSpace(code) != "" {
+		args = append(args, strings.TrimSpace(code))
+		where = append(where, fmt.Sprintf("code = $%d", len(args)))
+	}
+	if strings.TrimSpace(action) != "" {
+		args = append(args, strings.TrimSpace(action))
+		where = append(where, fmt.Sprintf("action = $%d", len(args)))
+	}
+
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, code, COALESCE(record_id, 0), action, user_id, COALESCE(user_name, ''), payload, created_at
+		FROM dictionary_audit
+		WHERE `+strings.Join(where, " AND ")+
+		" ORDER BY created_at DESC, id DESC LIMIT 10000", args...)
+	if err != nil {
+		return nil, fmt.Errorf("export dictionary audit: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]dto.DictionaryAuditItem, 0, 256)
+	for rows.Next() {
+		var item dto.DictionaryAuditItem
+		var payload []byte
+		if err := rows.Scan(
+			&item.ID, &item.Code, &item.RecordID, &item.Action, &item.UserID,
+			&item.UserName, &payload, &item.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan dictionary audit export: %w", err)
+		}
+		item.Payload = json.RawMessage(payload)
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
 // Export возвращает все записи справочника (до 10000) для выгрузки.

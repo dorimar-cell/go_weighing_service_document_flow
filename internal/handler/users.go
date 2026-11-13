@@ -85,6 +85,40 @@ func (h *UsersHandler) SetWeightRoom(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// Update: PUT /spa/api/weighing/users/{id}
+func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permSettings) {
+		return
+	}
+
+	id, err := parseNestedID(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_id", "Некорректный пользователь")
+		return
+	}
+
+	var payload dto.UpdateUserRequest
+	if err := decodeJSON(w, r, &payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+		return
+	}
+
+	if err := h.service.UpdateUser(r.Context(), id, payload); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "Пользователь не найден")
+			return
+		}
+		if validation, ok := err.(*service.ValidationError); ok {
+			writeError(w, http.StatusBadRequest, "validation_error", validation.Message)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal_error", "Не удалось сохранить")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // GetPreferences: GET /spa/api/weighing/journal/preferences
 func (h *UsersHandler) GetPreferences(w http.ResponseWriter, r *http.Request) {
 	if !requirePermission(w, r, permJournal) {

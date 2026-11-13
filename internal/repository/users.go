@@ -114,6 +114,31 @@ func (r *UsersRepository) SetWeightRoom(ctx context.Context, userID, weightRoomI
 	return nil
 }
 
+// UpdateUser меняет группу и/или активность пользователя.
+func (r *UsersRepository) UpdateUser(
+	ctx context.Context,
+	userID int64,
+	req dto.UpdateUserRequest,
+) error {
+	if req.GroupID == nil && req.Deleted == nil {
+		return nil
+	}
+
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE dir_users
+		SET id_dir_user_groups = COALESCE($2, id_dir_user_groups),
+		    deleted = COALESCE($3, deleted),
+		    modified_date = now()
+		WHERE id = $1`, userID, req.GroupID, req.Deleted)
+	if err != nil {
+		return fmt.Errorf("update user: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // JournalPreferences возвращает сохранённые фильтры и колонки пользователя.
 func (r *UsersRepository) JournalPreferences(
 	ctx context.Context,

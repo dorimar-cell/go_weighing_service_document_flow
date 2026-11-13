@@ -523,6 +523,60 @@ func (h *SessionHandler) Permissions(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// AuditExport: GET /spa/api/weighing/audit/export.csv
+func (h *SessionHandler) AuditExport(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permJournal) {
+		return
+	}
+
+	dateFrom, err := parseDateParam(r.URL.Query().Get("dateFrom"), false)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_date", err.Error())
+		return
+	}
+	dateTo, err := parseDateParam(r.URL.Query().Get("dateTo"), true)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_date", err.Error())
+		return
+	}
+
+	items, err := h.service.AuditExport(
+		r.Context(),
+		r.URL.Query().Get("action"),
+		r.URL.Query().Get("search"),
+		dateFrom,
+		dateTo,
+	)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(
+		`attachment; filename="audit-%s.csv"`, time.Now().Format("20060102-150405"),
+	))
+	_, _ = w.Write([]byte{0xEF, 0xBB, 0xBF})
+
+	writer := csv.NewWriter(w)
+	writer.Comma = ';'
+	_ = writer.Write([]string{
+		"ID", "Дата", "Рейс", "Транспорт", "Пользователь", "Действие", "Изменения",
+	})
+	for _, item := range items {
+		_ = writer.Write([]string{
+			strconv.FormatInt(item.ID, 10),
+			item.CreatedAt.Format("02.01.2006 15:04"),
+			strconv.FormatInt(item.SessionID, 10),
+			item.TransportNumber,
+			item.UserName,
+			item.Action,
+			string(item.Payload),
+		})
+	}
+	writer.Flush()
+}
+
 // AuditJournal: GET /spa/api/weighing/audit
 func (h *SessionHandler) AuditJournal(w http.ResponseWriter, r *http.Request) {
 	if !requirePermission(w, r, permJournal) {

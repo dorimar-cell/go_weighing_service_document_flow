@@ -37,6 +37,20 @@ func (s *UsersService) SetWeightRoom(ctx context.Context, userID, weightRoomID i
 	return s.repo.SetWeightRoom(ctx, userID, weightRoomID)
 }
 
+func (s *UsersService) UpdateUser(
+	ctx context.Context,
+	userID int64,
+	req dto.UpdateUserRequest,
+) error {
+	if userID <= 0 {
+		return &ValidationError{Message: "Некорректный пользователь"}
+	}
+	if userID == 1 {
+		return &ValidationError{Message: "Системного пользователя нельзя менять"}
+	}
+	return s.repo.UpdateUser(ctx, userID, req)
+}
+
 func (s *UsersService) JournalPreferences(
 	ctx context.Context,
 	userID int64,

@@ -30,6 +30,12 @@ type UpdateWeightRoomRequest struct {
 	WeightRoomID int64 `json:"weightRoomId"`
 }
 
+// UpdateUserRequest — группа и активность пользователя.
+type UpdateUserRequest struct {
+	GroupID *int64 `json:"groupId"`
+	Deleted *bool  `json:"deleted"`
+}
+
 // JournalPreferences — серверные настройки журнала пользователя.
 type JournalPreferences struct {
 	Filters   map[string]any `json:"filters"`

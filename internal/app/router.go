@@ -20,6 +20,8 @@ type Handlers struct {
 	RBAC       *handler.RBACHandler
 	Users      *handler.UsersHandler
 	Health     *handler.HealthHandler
+	Station    *handler.StationHandler
+	Metrics    *handler.MetricsHandler
 }
 
 func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *chi.Mux {
@@ -32,6 +34,7 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 	router.Use(middleware.CORS(corsOrigins))
 
 	router.Get("/healthz", handlers.Health.Check)
+	router.Get("/metrics", handlers.Metrics.Check)
 
 	router.Route("/spa/api/weighing", func(r chi.Router) {
 		r.Use(auth.Handler)
@@ -40,6 +43,7 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 		r.Get("/dictionaries/{code}/export.csv", handlers.Dictionary.Export)
 		r.Post("/dictionaries/{code}/import.csv", handlers.Dictionary.Import)
 		r.Get("/dictionary-audit", handlers.Dictionary.AuditList)
+		r.Get("/dictionary-audit/export.csv", handlers.Dictionary.AuditExport)
 		r.Post("/dictionaries/{code}", handlers.Dictionary.Create)
 		r.Patch("/dictionaries/{code}/{id}", handlers.Dictionary.Update)
 		r.Delete("/dictionaries/{code}/{id}", handlers.Dictionary.Delete)
@@ -66,6 +70,7 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 
 		r.Get("/permissions", handlers.Session.Permissions)
 		r.Get("/audit", handlers.Session.AuditJournal)
+		r.Get("/audit/export.csv", handlers.Session.AuditExport)
 
 		r.Get("/settings/app", handlers.Settings.GetApp)
 		r.Put("/settings/app", handlers.Settings.SaveApp)
@@ -76,8 +81,12 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 		r.Get("/users", handlers.Users.List)
 		r.Get("/weight-rooms", handlers.Users.WeightRooms)
 		r.Put("/users/{id}/weight-room", handlers.Users.SetWeightRoom)
+		r.Put("/users/{id}", handlers.Users.Update)
 		r.Get("/journal/preferences", handlers.Users.GetPreferences)
 		r.Put("/journal/preferences", handlers.Users.SavePreferences)
+
+		r.Get("/stations", handlers.Station.List)
+		r.Put("/stations/{id}", handlers.Station.Save)
 
 		r.Get("/reports", handlers.Report.Catalog)
 		r.Get("/reports/settings", handlers.Report.GetSettings)
