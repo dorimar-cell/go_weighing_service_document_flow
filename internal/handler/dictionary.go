@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/xuri/excelize/v2"
 
 	"go_weighing_service/internal/registry"
 	"go_weighing_service/internal/repository"
@@ -38,7 +39,10 @@ func (h *DictionaryHandler) List(w http.ResponseWriter, r *http.Request) {
 	pageSize := parseQueryInt(r, "pageSize", 25)
 	search := r.URL.Query().Get("search")
 
-	result, err := h.service.List(r.Context(), code, page, pageSize, search)
+	result, err := h.service.List(
+		r.Context(), code, page, pageSize, search,
+		r.URL.Query().Get("deleted") == "1",
+	)
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -176,6 +180,62 @@ func (h *DictionaryHandler) AuditExport(w http.ResponseWriter, r *http.Request) 
 		})
 	}
 	writer.Flush()
+}
+
+// AuditExportXLSX: GET /spa/api/weighing/dictionary-audit/export.xlsx
+func (h *DictionaryHandler) AuditExportXLSX(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permSettings) {
+		return
+	}
+
+	items, err := h.service.AuditExport(
+		r.Context(), r.URL.Query().Get("code"), r.URL.Query().Get("action"),
+	)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	file := excelize.NewFile()
+	defer func() { _ = file.Close() }()
+	sheet := "Справочники"
+	if _, err := file.NewSheet(sheet); err != nil {
+		h.handleError(w, err)
+		return
+	}
+	_ = file.DeleteSheet("Sheet1")
+
+	headers := []string{"ID", "Дата", "Справочник", "Запись", "Действие", "Пользователь"}
+	for index, header := range headers {
+		cell, _ := excelize.CoordinatesToCellName(index+1, 1)
+		_ = file.SetCellValue(sheet, cell, header)
+	}
+	for index, item := range items {
+		row := index + 2
+		values := []any{
+			item.ID, item.CreatedAt.Format("02.01.2006 15:04"), item.Code,
+			item.RecordID, item.Action, item.UserName,
+		}
+		for column, value := range values {
+			cell, _ := excelize.CoordinatesToCellName(column+1, row)
+			_ = file.SetCellValue(sheet, cell, value)
+		}
+	}
+	_ = file.SetColWidth(sheet, "A", "A", 8)
+	_ = file.SetColWidth(sheet, "B", "B", 18)
+	_ = file.SetColWidth(sheet, "C", "C", 18)
+	_ = file.SetColWidth(sheet, "D", "D", 10)
+	_ = file.SetColWidth(sheet, "E", "E", 16)
+	_ = file.SetColWidth(sheet, "F", "F", 20)
+	_ = file.SetPanes(sheet, &excelize.Panes{Freeze: true, YSplit: 1, TopLeftCell: "A2", ActivePane: "bottomLeft"})
+
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(
+		`attachment; filename="dictionary-audit-%s.xlsx"`, time.Now().Format("20060102-150405"),
+	))
+	if err := file.Write(w); err != nil {
+		slog.Error("export dictionary audit xlsx", "error", err)
+	}
 }
 
 // AuditList: GET /spa/api/weighing/dictionary-audit?code&action&page&pageSize

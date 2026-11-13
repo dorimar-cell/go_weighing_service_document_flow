@@ -132,6 +132,8 @@ func (h *SessionHandler) List(w http.ResponseWriter, r *http.Request) {
 		search,
 		dateFrom,
 		dateTo,
+		optionalQueryID(r, "operationTypeId"),
+		optionalQueryID(r, "cargoId"),
 		r.URL.Query().Get("sort"),
 		r.URL.Query().Get("dir"),
 		page,
@@ -186,7 +188,15 @@ func (h *SessionHandler) Export(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	items, err := h.service.Export(r.Context(), status, search, dateFrom, dateTo)
+	items, err := h.service.Export(
+		r.Context(),
+		status,
+		search,
+		dateFrom,
+		dateTo,
+		optionalQueryID(r, "operationTypeId"),
+		optionalQueryID(r, "cargoId"),
+	)
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -260,6 +270,8 @@ func (h *SessionHandler) ExportXLSX(w http.ResponseWriter, r *http.Request) {
 		r.URL.Query().Get("search"),
 		dateFrom,
 		dateTo,
+		optionalQueryID(r, "operationTypeId"),
+		optionalQueryID(r, "cargoId"),
 	)
 	if err != nil {
 		h.handleError(w, err)
@@ -575,6 +587,74 @@ func (h *SessionHandler) AuditExport(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	writer.Flush()
+}
+
+// AuditExportXLSX: GET /spa/api/weighing/audit/export.xlsx
+func (h *SessionHandler) AuditExportXLSX(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permJournal) {
+		return
+	}
+
+	dateFrom, err := parseDateParam(r.URL.Query().Get("dateFrom"), false)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_date", err.Error())
+		return
+	}
+	dateTo, err := parseDateParam(r.URL.Query().Get("dateTo"), true)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_date", err.Error())
+		return
+	}
+
+	items, err := h.service.AuditExport(
+		r.Context(), r.URL.Query().Get("action"), r.URL.Query().Get("search"), dateFrom, dateTo,
+	)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	file := excelize.NewFile()
+	defer func() { _ = file.Close() }()
+	sheet := "Аудит"
+	if _, err := file.NewSheet(sheet); err != nil {
+		h.handleError(w, err)
+		return
+	}
+	_ = file.DeleteSheet("Sheet1")
+
+	headers := []string{"ID", "Дата", "Рейс", "Транспорт", "Пользователь", "Действие", "Изменения"}
+	for index, header := range headers {
+		cell, _ := excelize.CoordinatesToCellName(index+1, 1)
+		_ = file.SetCellValue(sheet, cell, header)
+	}
+	for index, item := range items {
+		row := index + 2
+		values := []any{
+			item.ID, item.CreatedAt.Format("02.01.2006 15:04"), item.SessionID,
+			item.TransportNumber, item.UserName, item.Action, string(item.Payload),
+		}
+		for column, value := range values {
+			cell, _ := excelize.CoordinatesToCellName(column+1, row)
+			_ = file.SetCellValue(sheet, cell, value)
+		}
+	}
+	_ = file.SetColWidth(sheet, "A", "A", 8)
+	_ = file.SetColWidth(sheet, "B", "B", 18)
+	_ = file.SetColWidth(sheet, "C", "C", 8)
+	_ = file.SetColWidth(sheet, "D", "D", 18)
+	_ = file.SetColWidth(sheet, "E", "E", 18)
+	_ = file.SetColWidth(sheet, "F", "F", 14)
+	_ = file.SetColWidth(sheet, "G", "G", 60)
+	_ = file.SetPanes(sheet, &excelize.Panes{Freeze: true, YSplit: 1, TopLeftCell: "A2", ActivePane: "bottomLeft"})
+
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(
+		`attachment; filename="audit-%s.xlsx"`, time.Now().Format("20060102-150405"),
+	))
+	if err := file.Write(w); err != nil {
+		slog.Error("export audit xlsx", "error", err)
+	}
 }
 
 // AuditJournal: GET /spa/api/weighing/audit

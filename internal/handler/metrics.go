@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"go_weighing_service/internal/middleware"
 )
 
 // MetricsHandler — простые метрики Prometheus.
@@ -48,4 +50,10 @@ func (h *MetricsHandler) Check(w http.ResponseWriter, r *http.Request) {
 	_, _ = fmt.Fprintf(w, "# HELP weighing_uptime_seconds Process uptime\n")
 	_, _ = fmt.Fprintf(w, "# TYPE weighing_uptime_seconds gauge\nweighing_uptime_seconds %.0f\n",
 		time.Since(h.startedAt).Seconds())
+
+	total, errors := middleware.RequestStats()
+	_, _ = fmt.Fprintf(w, "# HELP weighing_http_requests_total Total HTTP requests\n")
+	_, _ = fmt.Fprintf(w, "# TYPE weighing_http_requests_total counter\nweighing_http_requests_total %d\n", total)
+	_, _ = fmt.Fprintf(w, "# HELP weighing_http_errors_total HTTP 5xx responses\n")
+	_, _ = fmt.Fprintf(w, "# TYPE weighing_http_errors_total counter\nweighing_http_errors_total %d\n", errors)
 }

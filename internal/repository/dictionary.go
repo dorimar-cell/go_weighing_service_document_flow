@@ -35,8 +35,12 @@ func (r *DictionaryRepository) List(
 	page int,
 	pageSize int,
 	search string,
+	includeDeleted bool,
 ) (*model.DictionaryList, error) {
-	where := []string{"deleted_at IS NULL"}
+	where := []string{"1 = 1"}
+	if !includeDeleted {
+		where = []string{"deleted_at IS NULL"}
+	}
 	args := make([]any, 0, 3)
 
 	if term := strings.TrimSpace(search); term != "" {

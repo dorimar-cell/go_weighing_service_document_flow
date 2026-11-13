@@ -29,6 +29,7 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 
 	router.Use(chiMiddleware.RequestID)
 	router.Use(middleware.RequestLogger())
+	router.Use(middleware.Metrics)
 	router.Use(chiMiddleware.Recoverer)
 	router.Use(chiMiddleware.Timeout(15 * time.Second))
 	router.Use(middleware.CORS(corsOrigins))
@@ -44,6 +45,7 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 		r.Post("/dictionaries/{code}/import.csv", handlers.Dictionary.Import)
 		r.Get("/dictionary-audit", handlers.Dictionary.AuditList)
 		r.Get("/dictionary-audit/export.csv", handlers.Dictionary.AuditExport)
+		r.Get("/dictionary-audit/export.xlsx", handlers.Dictionary.AuditExportXLSX)
 		r.Post("/dictionaries/{code}", handlers.Dictionary.Create)
 		r.Patch("/dictionaries/{code}/{id}", handlers.Dictionary.Update)
 		r.Delete("/dictionaries/{code}/{id}", handlers.Dictionary.Delete)
@@ -71,6 +73,7 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 		r.Get("/permissions", handlers.Session.Permissions)
 		r.Get("/audit", handlers.Session.AuditJournal)
 		r.Get("/audit/export.csv", handlers.Session.AuditExport)
+		r.Get("/audit/export.xlsx", handlers.Session.AuditExportXLSX)
 
 		r.Get("/settings/app", handlers.Settings.GetApp)
 		r.Put("/settings/app", handlers.Settings.SaveApp)

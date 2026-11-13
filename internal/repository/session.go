@@ -359,12 +359,14 @@ func (r *SessionRepository) List(
 	search string,
 	dateFrom *time.Time,
 	dateTo *time.Time,
+	operationTypeID *int64,
+	cargoID *int64,
 	sortBy string,
 	direction string,
 	page int,
 	pageSize int,
 ) (*dto.SessionListResponse, error) {
-	where, args := buildSessionWhere(status, search, dateFrom, dateTo)
+	where, args := buildSessionWhere(status, search, dateFrom, dateTo, operationTypeID, cargoID)
 
 	orderExpression := "w.created_date"
 	switch sortBy {
@@ -468,8 +470,10 @@ func (r *SessionRepository) Export(
 	search string,
 	dateFrom *time.Time,
 	dateTo *time.Time,
+	operationTypeID *int64,
+	cargoID *int64,
 ) ([]dto.SessionDTO, error) {
-	where, args := buildSessionWhere(status, search, dateFrom, dateTo)
+	where, args := buildSessionWhere(status, search, dateFrom, dateTo, operationTypeID, cargoID)
 	query := sessionSelect + " " + where + " ORDER BY w.created_date DESC LIMIT 10000"
 
 	rows, err := r.pool.Query(ctx, query, args...)
@@ -680,9 +684,11 @@ func buildSessionWhere(
 	search string,
 	dateFrom *time.Time,
 	dateTo *time.Time,
+	operationTypeID *int64,
+	cargoID *int64,
 ) (string, []any) {
 	where := []string{"1 = 1"}
-	args := make([]any, 0, 3)
+	args := make([]any, 0, 5)
 
 	switch status {
 	case "open":
@@ -714,6 +720,16 @@ func buildSessionWhere(
 	if dateTo != nil {
 		args = append(args, *dateTo)
 		where = append(where, fmt.Sprintf("w.date_time_first_weight < $%d", len(args)))
+	}
+
+	if operationTypeID != nil {
+		args = append(args, *operationTypeID)
+		where = append(where, fmt.Sprintf("ot.id = $%d", len(args)))
+	}
+
+	if cargoID != nil {
+		args = append(args, *cargoID)
+		where = append(where, fmt.Sprintf("line.cargo_id = $%d", len(args)))
 	}
 
 	return " WHERE " + strings.Join(where, " AND "), args

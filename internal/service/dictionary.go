@@ -36,6 +36,7 @@ func (s *DictionaryService) List(
 	page int,
 	pageSize int,
 	search string,
+	includeDeleted bool,
 ) (*dto.DictionaryListResponse, error) {
 	def, err := resolve(code)
 	if err != nil {
@@ -44,7 +45,7 @@ func (s *DictionaryService) List(
 
 	page, pageSize = normalizePaging(page, pageSize)
 
-	result, err := s.repo.List(ctx, def, page, pageSize, search)
+	result, err := s.repo.List(ctx, def, page, pageSize, search, includeDeleted)
 	if err != nil {
 		return nil, err
 	}
