@@ -9,6 +9,33 @@ import (
 	"go_weighing_service/internal/dto"
 )
 
+// reportLocation — часовой пояс печатных бланков. Задаётся WEIGHING_TZ.
+var reportLocation = time.UTC
+
+// SetTimezone устанавливает часовой пояс для дат и времени в отчётах.
+func SetTimezone(name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil
+	}
+
+	location, err := time.LoadLocation(name)
+	if err != nil {
+		return err
+	}
+
+	reportLocation = location
+	return nil
+}
+
+func inLocation(value time.Time) time.Time {
+	return value.In(reportLocation)
+}
+
+func nowInLocation() time.Time {
+	return time.Now().In(reportLocation)
+}
+
 // wrapHTML оборачивает готовое тело бланка в самодостаточный HTML-документ
 // с печатными стилями A4. Тело собирается функциями пакета и уже экранировано.
 func wrapHTML(title string, landscape bool, body string) []byte {
@@ -119,39 +146,48 @@ func dateOnly(value time.Time) string {
 	if value.IsZero() {
 		return "—"
 	}
-	return value.Format("02.01.2006")
+	return inLocation(value).Format("02.01.2006")
 }
 
 func dateOnlyPtr(value *time.Time) string {
 	if value == nil || value.IsZero() {
 		return "—"
 	}
-	return value.Format("02.01.2006")
+	return inLocation(*value).Format("02.01.2006")
 }
 
 func timeOnly(value time.Time) string {
 	if value.IsZero() {
 		return "—"
 	}
-	return value.Format("15:04")
+	return inLocation(value).Format("15:04")
 }
 
 func timeOnlyPtr(value *time.Time) string {
 	if value == nil || value.IsZero() {
 		return "—"
 	}
-	return value.Format("15:04")
+	return inLocation(*value).Format("15:04")
 }
 
 func dateTimePtr(value *time.Time) string {
 	if value == nil || value.IsZero() {
 		return "—"
 	}
-	return value.Format("02.01.2006 15:04")
+	return inLocation(*value).Format("02.01.2006 15:04")
 }
 
 func dateOnlyNow() string {
-	return time.Now().Format("02.01.2006")
+	return nowInLocation().Format("02.01.2006")
+}
+
+// prettyDate переводит дату из формы (ГГГГ-ММ-ДД) в печатный вид.
+func prettyDate(value string) string {
+	parsed, err := time.ParseInLocation("2006-01-02", strings.TrimSpace(value), time.UTC)
+	if err != nil {
+		return value
+	}
+	return parsed.Format("02.01.2006")
 }
 
 func int64Text(value int64) string {

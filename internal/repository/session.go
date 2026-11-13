@@ -659,6 +659,93 @@ type scanner interface {
 	Scan(dest ...any) error
 }
 
+// aggregateSpec — SQL-выражения группировки для агрегатных отчётов.
+type aggregateSpec struct {
+	groupExpr string
+	subExpr   string
+}
+
+var aggregateSpecs = map[string]aggregateSpec{
+	"cargo": {
+		groupExpr: "COALESCE(line.cargo_name, 'Без груза')",
+		subExpr:   "''::text",
+	},
+	"counterparty": {
+		groupExpr: "COALESCE(cp.name, 'Без контрагента')",
+		subExpr:   "COALESCE(line.cargo_name, 'Без груза')",
+	},
+	"carrier": {
+		groupExpr: "COALESCE(cr.name, 'Без перевозчика')",
+		subExpr:   "COALESCE(line.cargo_name, 'Без груза')",
+	},
+	"driver": {
+		groupExpr: "COALESCE(d.name, 'Без водителя')",
+		subExpr:   "COALESCE(line.cargo_name, 'Без груза')",
+	},
+	"storage": {
+		groupExpr: "COALESCE(line.storage_name, 'Без склада')",
+		subExpr:   "COALESCE(ot.name, 'Без типа операции')",
+	},
+	"operation": {
+		groupExpr: "COALESCE(ot.name, 'Без типа операции')",
+		subExpr:   "''::text",
+	},
+}
+
+// Aggregate считает закрытые рейсы по измерению: рейсов и нетто.
+func (r *SessionRepository) Aggregate(
+	ctx context.Context,
+	dimension string,
+	dateFrom *time.Time,
+	dateTo *time.Time,
+) ([]dto.AggregateRow, error) {
+	spec, ok := aggregateSpecs[dimension]
+	if !ok {
+		return nil, ErrNotFound
+	}
+
+	where := []string{"w.flag_weight = true", "w.deleted = false"}
+	args := make([]any, 0, 2)
+
+	if dateFrom != nil {
+		args = append(args, *dateFrom)
+		where = append(where, fmt.Sprintf("w.date_time_first_weight >= $%d", len(args)))
+	}
+	if dateTo != nil {
+		args = append(args, *dateTo)
+		where = append(where, fmt.Sprintf("w.date_time_first_weight < $%d", len(args)))
+	}
+
+	query := fmt.Sprintf(`
+		SELECT %s AS grp,
+		       %s AS sub,
+		       count(*) AS sessions,
+		       COALESCE(sum(abs(w.first_weight - COALESCE(w.second_weight, w.first_weight))), 0)::float8 AS netto
+		%s
+		WHERE %s
+		GROUP BY 1, 2
+		ORDER BY 1, 2`,
+		spec.groupExpr, spec.subExpr, sessionFrom, strings.Join(where, " AND "),
+	)
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("aggregate %s: %w", dimension, err)
+	}
+	defer rows.Close()
+
+	items := make([]dto.AggregateRow, 0, 64)
+	for rows.Next() {
+		var item dto.AggregateRow
+		if err := rows.Scan(&item.Group, &item.SubGroup, &item.Sessions, &item.NettoKg); err != nil {
+			return nil, fmt.Errorf("scan aggregate %s: %w", dimension, err)
+		}
+		items = append(items, item)
+	}
+
+	return items, rows.Err()
+}
+
 func scanSession(row scanner) (*dto.SessionDTO, error) {
 	var item dto.SessionDTO
 	var secondWeight sql.NullFloat64

@@ -100,7 +100,7 @@ func renderJournalXLSX(items []dto.SessionDTO, filter journalFilter) ([]byte, er
 			item.CarrierName,
 			item.StorageName,
 			item.OperationTypeName,
-			item.FirstMeasuredAt.Format("02.01.2006 15:04"),
+			inLocation(item.FirstMeasuredAt).Format("02.01.2006 15:04"),
 			item.FirstWeightKg / 1000,
 			secondWeightTime(item.SecondMeasuredAt),
 			weightOrNil(item.SecondWeightKg),
@@ -157,9 +157,13 @@ func journalMetaText(filter journalFilter) string {
 	to := filter.DateTo
 	if from == "" {
 		from = "начало"
+	} else {
+		from = prettyDate(from)
 	}
 	if to == "" {
 		to = "по настоящее время"
+	} else {
+		to = prettyDate(to)
 	}
 
 	text := ""
@@ -171,7 +175,7 @@ func journalMetaText(filter journalFilter) string {
 	if filter.Search != "" {
 		text += ". Поиск: " + filter.Search
 	}
-	text += ". Сформирован: " + time.Now().Format("02.01.2006 15:04")
+	text += ". Сформирован: " + nowInLocation().Format("02.01.2006 15:04")
 
 	return text
 }
@@ -189,7 +193,7 @@ func secondWeightTime(value *time.Time) any {
 	if value == nil {
 		return ""
 	}
-	return value.Format("02.01.2006 15:04")
+	return inLocation(*value).Format("02.01.2006 15:04")
 }
 
 func weightOrNil(value *float64) any {

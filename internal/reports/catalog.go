@@ -4,8 +4,9 @@ import "go_weighing_service/internal/dto"
 
 // Группы каталога.
 const (
-	GroupJournals  = "Журналы и реестры"
-	GroupDocuments = "Документы по рейсу"
+	GroupJournals   = "Журналы и реестры"
+	GroupAggregates = "Агрегаты"
+	GroupDocuments  = "Документы по рейсу"
 )
 
 var catalog = []dto.ReportDefinition{
@@ -32,11 +33,65 @@ var catalog = []dto.ReportDefinition{
 		},
 	},
 	{
+		Code:        "cargo-summary",
+		Title:       "Отчёт по грузам",
+		Group:       GroupAggregates,
+		Kind:        "grid",
+		Description: "Нетто и количество рейсов по каждому грузу за период.",
+		Formats:     []string{"html", "xlsx"},
+		Params:      periodParams(),
+	},
+	{
+		Code:        "counterparty-summary",
+		Title:       "Отчёт по контрагентам",
+		Group:       GroupAggregates,
+		Kind:        "grid",
+		Description: "Нетто по контрагентам с разбивкой по грузам.",
+		Formats:     []string{"html", "xlsx"},
+		Params:      periodParams(),
+	},
+	{
+		Code:        "carrier-summary",
+		Title:       "Отчёт по перевозчикам",
+		Group:       GroupAggregates,
+		Kind:        "grid",
+		Description: "Нетто по перевозчикам с разбивкой по грузам.",
+		Formats:     []string{"html", "xlsx"},
+		Params:      periodParams(),
+	},
+	{
+		Code:        "driver-summary",
+		Title:       "Отчёт по водителям",
+		Group:       GroupAggregates,
+		Kind:        "grid",
+		Description: "Нетто по водителям с разбивкой по грузам.",
+		Formats:     []string{"html", "xlsx"},
+		Params:      periodParams(),
+	},
+	{
+		Code:        "storage-summary",
+		Title:       "Взвешивания по складам",
+		Group:       GroupAggregates,
+		Kind:        "grid",
+		Description: "Нетто по складам с разбивкой по типу операции.",
+		Formats:     []string{"html", "xlsx"},
+		Params:      periodParams(),
+	},
+	{
 		Code:        "ts-card",
 		Title:       "Карточка ТС",
 		Group:       GroupDocuments,
 		Kind:        "document",
 		Description: "Реквизиты рейса, оба взвешивания, брутто/тара/нетто, фото с камер и подписи.",
+		Formats:     []string{"html"},
+		Params:      sessionParams(),
+	},
+	{
+		Code:        "talon",
+		Title:       "Талон взвешивания",
+		Group:       GroupDocuments,
+		Kind:        "document",
+		Description: "Отвесной талон: ТС, прицеп, водитель, груз, брутто/тара/нетто и подписи.",
 		Formats:     []string{"html"},
 		Params:      sessionParams(),
 	},
@@ -63,6 +118,13 @@ var catalog = []dto.ReportDefinition{
 func sessionParams() []dto.ReportParam {
 	return []dto.ReportParam{
 		{Key: "sessionId", Label: "Рейс", Type: "session", Required: true},
+	}
+}
+
+func periodParams() []dto.ReportParam {
+	return []dto.ReportParam{
+		{Key: "dateFrom", Label: "С даты", Type: "date"},
+		{Key: "dateTo", Label: "По дату", Type: "date"},
 	}
 }
 

@@ -16,6 +16,7 @@ import (
 	"go_weighing_service/internal/handler"
 	"go_weighing_service/internal/logger"
 	"go_weighing_service/internal/middleware"
+	"go_weighing_service/internal/reports"
 	"go_weighing_service/internal/repository"
 	"go_weighing_service/internal/service"
 )
@@ -23,6 +24,10 @@ import (
 func main() {
 	cfg := config.Load()
 	logger.Setup(cfg.Env)
+
+	if err := reports.SetTimezone(cfg.ReportTimezone); err != nil {
+		slog.Warn("report timezone not applied", "timezone", cfg.ReportTimezone, "error", err)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

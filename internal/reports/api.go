@@ -9,6 +9,9 @@ import (
 // JournalFilter — фильтры, попадающие в шапку печатного журнала.
 type JournalFilter = journalFilter
 
+// AggregateFilter — фильтры агрегатного отчёта.
+type AggregateFilter = aggregateFilter
+
 // InlinePhoto — фотография рейса для карточки ТС.
 type InlinePhoto = inlinePhoto
 
@@ -20,6 +23,21 @@ func RenderJournal(items []dto.SessionDTO, filter JournalFilter) []byte {
 // RenderJournalXLSX собирает печатную книгу журнала.
 func RenderJournalXLSX(items []dto.SessionDTO, filter JournalFilter) ([]byte, error) {
 	return renderJournalXLSX(items, filter)
+}
+
+// RenderAggregate собирает HTML агрегатного отчёта.
+func RenderAggregate(rows []dto.AggregateRow, filter AggregateFilter) []byte {
+	return renderAggregate(rows, filter)
+}
+
+// RenderAggregateXLSX собирает агрегатный отчёт книгой Excel.
+func RenderAggregateXLSX(rows []dto.AggregateRow, filter AggregateFilter) ([]byte, error) {
+	return renderAggregateXLSX(rows, filter)
+}
+
+// RenderTalon собирает талон взвешивания.
+func RenderTalon(details *dto.SessionDetails, settings dto.ReportSettings) []byte {
+	return renderTalon(details, settings)
 }
 
 // RenderTSCard собирает карточку транспортного средства.

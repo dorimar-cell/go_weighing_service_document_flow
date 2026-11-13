@@ -62,11 +62,114 @@ func (s *ReportService) Run(ctx context.Context, code string, query url.Values) 
 	switch code {
 	case "journal":
 		return s.runJournal(ctx, query, format)
-	case "ts-card", "ttn", "torg12":
+	case "ts-card", "talon", "ttn", "torg12":
 		return s.runDocument(ctx, code, query, format)
-	default:
-		return nil, &ValidationError{Message: "Отчёт не найден"}
 	}
+
+	if _, ok := aggregateDimensions[code]; ok {
+		return s.runAggregate(ctx, code, query, format)
+	}
+
+	return nil, &ValidationError{Message: "Отчёт не найден"}
+}
+
+type aggregateDimension struct {
+	Dimension    string
+	Title        string
+	Subtitle     string
+	ShowSubGroup bool
+}
+
+var aggregateDimensions = map[string]aggregateDimension{
+	"cargo-summary": {
+		Dimension: "cargo",
+		Title:     "Отчёт по грузам",
+		Subtitle:  "Нетто и количество закрытых рейсов по грузам",
+	},
+	"counterparty-summary": {
+		Dimension:    "counterparty",
+		Title:        "Отчёт по контрагентам",
+		Subtitle:     "Нетто по контрагентам с разбивкой по грузам",
+		ShowSubGroup: true,
+	},
+	"carrier-summary": {
+		Dimension:    "carrier",
+		Title:        "Отчёт по перевозчикам",
+		Subtitle:     "Нетто по перевозчикам с разбивкой по грузам",
+		ShowSubGroup: true,
+	},
+	"driver-summary": {
+		Dimension:    "driver",
+		Title:        "Отчёт по водителям",
+		Subtitle:     "Нетто по водителям с разбивкой по грузам",
+		ShowSubGroup: true,
+	},
+	"storage-summary": {
+		Dimension:    "storage",
+		Title:        "Взвешивания по складам",
+		Subtitle:     "Нетто по складам с разбивкой по типу операции",
+		ShowSubGroup: true,
+	},
+}
+
+func (s *ReportService) runAggregate(
+	ctx context.Context,
+	code string,
+	query url.Values,
+	format string,
+) (*ReportFile, error) {
+	meta := aggregateDimensions[code]
+
+	if format != "html" && format != "xlsx" {
+		return nil, &ValidationError{Message: "Агрегатный отчёт поддерживает форматы HTML и XLSX"}
+	}
+
+	dateFrom, err := parseReportDate(query.Get("dateFrom"), false)
+	if err != nil {
+		return nil, err
+	}
+	dateTo, err := parseReportDate(query.Get("dateTo"), true)
+	if err != nil {
+		return nil, err
+	}
+
+	items, err := s.sessions.Aggregate(ctx, meta.Dimension, dateFrom, dateTo)
+	if err != nil {
+		return nil, err
+	}
+
+	settings, err := s.Settings(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	filter := reports.AggregateFilter{
+		Title:        meta.Title,
+		Subtitle:     meta.Subtitle,
+		ShowSubGroup: meta.ShowSubGroup,
+		DateFrom:     strings.TrimSpace(query.Get("dateFrom")),
+		DateTo:       strings.TrimSpace(query.Get("dateTo")),
+		Organization: settings.OrganizationName,
+	}
+
+	stamp := time.Now().Format("20060102-150405")
+	if format == "xlsx" {
+		data, err := reports.RenderAggregateXLSX(items, filter)
+		if err != nil {
+			return nil, err
+		}
+		return &ReportFile{
+			Name:        code + "-" + stamp + ".xlsx",
+			ContentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+			Data:        data,
+		}, nil
+	}
+
+	return &ReportFile{
+		Name:        code + "-" + stamp + ".html",
+		ContentType: "text/html; charset=utf-8",
+		Data:        reports.RenderAggregate(items, filter),
+	}, nil
 }
 
 func (s *ReportService) runJournal(ctx context.Context, query url.Values, format string) (*ReportFile, error) {
@@ -165,6 +268,12 @@ func (s *ReportService) runDocument(
 			Name:        fmt.Sprintf("ts-card-%d-%s.html", sessionID, stamp),
 			ContentType: "text/html; charset=utf-8",
 			Data:        reports.RenderTSCard(details, settings, photos),
+		}, nil
+	case "talon":
+		return &ReportFile{
+			Name:        fmt.Sprintf("talon-%d-%s.html", sessionID, stamp),
+			ContentType: "text/html; charset=utf-8",
+			Data:        reports.RenderTalon(details, settings),
 		}, nil
 	case "ttn":
 		doc := s.ttnDefaults(details, settings)

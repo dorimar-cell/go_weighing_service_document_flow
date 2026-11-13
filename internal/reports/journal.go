@@ -3,7 +3,6 @@ package reports
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"go_weighing_service/internal/dto"
 )
@@ -26,9 +25,13 @@ func journalMeta(filter journalFilter) string {
 	to := filter.DateTo
 	if from == "" {
 		from = "начало"
+	} else {
+		from = prettyDate(from)
 	}
 	if to == "" {
 		to = "по настоящее время"
+	} else {
+		to = prettyDate(to)
 	}
 	if filter.DateFrom == "" && filter.DateTo == "" {
 		period.WriteString("<span>Период: весь журнал</span>")
@@ -39,7 +42,7 @@ func journalMeta(filter journalFilter) string {
 	if filter.Search != "" {
 		period.WriteString("<span>Поиск: " + esc(filter.Search) + "</span>")
 	}
-	period.WriteString("<span>Сформирован: " + time.Now().Format("02.01.2006 15:04") + "</span>")
+	period.WriteString("<span>Сформирован: " + nowInLocation().Format("02.01.2006 15:04") + "</span>")
 	period.WriteString("</div>")
 
 	return period.String()

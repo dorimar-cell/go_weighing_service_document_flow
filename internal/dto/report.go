@@ -47,6 +47,14 @@ type ReportSettings struct {
 	Accountant       string `json:"accountant"`
 }
 
+// AggregateRow — строка агрегатного отчёта (группировка + нетто).
+type AggregateRow struct {
+	Group    string  `json:"group"`
+	SubGroup string  `json:"subGroup"`
+	Sessions int     `json:"sessions"`
+	NettoKg  float64 `json:"nettoKg"`
+}
+
 // SessionDetails — данные рейса, которых нет в журнальном DTO,
 // но которые нужны бланкам (ИНН, адреса, цена груза, водительское).
 type SessionDetails struct {
