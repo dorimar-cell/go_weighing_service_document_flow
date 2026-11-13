@@ -60,8 +60,12 @@ func main() {
 	passHandler := handler.NewPassHandler(passService)
 
 	sessionRepo := repository.NewSessionRepository(pool)
-	sessionService := service.NewSessionService(sessionRepo, passRepo, measurementVerifier)
+	settingsRepo := repository.NewSettingsRepository(pool)
+	sessionService := service.NewSessionService(sessionRepo, passRepo, settingsRepo, measurementVerifier)
 	sessionHandler := handler.NewSessionHandler(sessionService)
+
+	settingsService := service.NewSettingsService(settingsRepo)
+	settingsHandler := handler.NewSettingsHandler(settingsService)
 
 	photoRepo := repository.NewPhotoRepository(pool)
 	photoService := service.NewPhotoService(photoRepo, cfg.PhotoDir)
@@ -78,6 +82,7 @@ func main() {
 			Pass:       passHandler,
 			Photo:      photoHandler,
 			Report:     reportHandler,
+			Settings:   settingsHandler,
 		},
 		auth,
 		cfg.CORSOrigins,

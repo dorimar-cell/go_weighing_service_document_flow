@@ -14,15 +14,17 @@ import (
 type SessionService struct {
 	repo     *repository.SessionRepository
 	passes   *repository.PassRepository
+	settings *repository.SettingsRepository
 	verifier *MeasurementVerifier
 }
 
 func NewSessionService(
 	repo *repository.SessionRepository,
 	passes *repository.PassRepository,
+	settings *repository.SettingsRepository,
 	verifier *MeasurementVerifier,
 ) *SessionService {
-	return &SessionService{repo: repo, passes: passes, verifier: verifier}
+	return &SessionService{repo: repo, passes: passes, settings: settings, verifier: verifier}
 }
 
 func (s *SessionService) Create(
@@ -68,6 +70,19 @@ func (s *SessionService) Create(
 
 	if request.TransportNumber == "" {
 		return nil, &ValidationError{Message: "Укажите номер транспортного средства"}
+	}
+	if err := s.validateRequiredFields(
+		ctx,
+		request.TransportNumber,
+		request.DriverName,
+		request.TrailerNumber,
+		request.CargoID,
+		request.CounterpartyID,
+		request.CarrierID,
+		request.StorageID,
+		request.OperationTypeID,
+	); err != nil {
+		return nil, err
 	}
 	if err := s.verifier.Verify(request.Measurement); err != nil {
 		return nil, err
@@ -205,6 +220,20 @@ func (s *SessionService) Update(
 		request.SecondMeasuredAt = nil
 	}
 
+	if err := s.validateRequiredFields(
+		ctx,
+		request.TransportNumber,
+		request.DriverName,
+		request.TrailerNumber,
+		request.CargoID,
+		request.CounterpartyID,
+		request.CarrierID,
+		request.StorageID,
+		request.OperationTypeID,
+	); err != nil {
+		return nil, err
+	}
+
 	return s.repo.Update(ctx, id, request, userID)
 }
 
@@ -214,6 +243,60 @@ func (s *SessionService) Audit(ctx context.Context, id int64) ([]dto.SessionAudi
 		return nil, &ValidationError{Message: "Некорректный идентификатор рейса"}
 	}
 	return s.repo.Audit(ctx, id)
+}
+
+// validateRequiredFields проверяет обязательность полей по настройкам весовой.
+func (s *SessionService) validateRequiredFields(
+	ctx context.Context,
+	transport string,
+	driver string,
+	trailer string,
+	cargo *int64,
+	counterparty *int64,
+	carrier *int64,
+	storage *int64,
+	operationType *int64,
+) error {
+	if s.settings == nil {
+		return nil
+	}
+
+	settings, err := s.settings.App(ctx)
+	if err != nil {
+		return err
+	}
+
+	missing := make([]string, 0, 8)
+	if strings.TrimSpace(transport) == "" {
+		missing = append(missing, "номер ТС")
+	}
+	if settings.RequireDriver && strings.TrimSpace(driver) == "" {
+		missing = append(missing, "водитель")
+	}
+	if settings.RequireTrailer && strings.TrimSpace(trailer) == "" {
+		missing = append(missing, "прицеп")
+	}
+	if settings.RequireCargo && cargo == nil {
+		missing = append(missing, "груз")
+	}
+	if settings.RequireCounterparty && counterparty == nil {
+		missing = append(missing, "контрагент")
+	}
+	if settings.RequireCarrier && carrier == nil {
+		missing = append(missing, "перевозчик")
+	}
+	if settings.RequireStorage && storage == nil {
+		missing = append(missing, "склад")
+	}
+	if settings.RequireOperationType && operationType == nil {
+		missing = append(missing, "тип операции")
+	}
+
+	if len(missing) > 0 {
+		return &ValidationError{Message: "Заполните обязательные поля: " + strings.Join(missing, ", ")}
+	}
+
+	return nil
 }
 
 func (s *SessionService) Export(

@@ -17,6 +17,7 @@ type Handlers struct {
 	Pass       *handler.PassHandler
 	Photo      *handler.PhotoHandler
 	Report     *handler.ReportHandler
+	Settings   *handler.SettingsHandler
 }
 
 func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *chi.Mux {
@@ -60,6 +61,9 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 		r.Put("/sessions/{id}/documents/{kind}", handlers.Report.SaveDocument)
 
 		r.Get("/permissions", handlers.Session.Permissions)
+
+		r.Get("/settings/app", handlers.Settings.GetApp)
+		r.Put("/settings/app", handlers.Settings.SaveApp)
 
 		r.Get("/reports", handlers.Report.Catalog)
 		r.Get("/reports/settings", handlers.Report.GetSettings)

@@ -15,6 +15,7 @@ const (
 	permExport       = "W006"
 	permPasses       = "W007"
 	permEdit         = "W008"
+	permSettings     = "W009"
 )
 
 func requirePermission(w http.ResponseWriter, r *http.Request, permission string) bool {
