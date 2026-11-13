@@ -61,3 +61,15 @@ func (s *PassService) Get(ctx context.Context, id int64) (*dto.PassDTO, error) {
 	}
 	return s.repo.Get(ctx, id)
 }
+
+func (s *PassService) SetEnabled(
+	ctx context.Context,
+	id int64,
+	enabled bool,
+	userID int64,
+) (*dto.PassDTO, error) {
+	if id <= 0 {
+		return nil, &ValidationError{Message: "Некорректный идентификатор пропуска"}
+	}
+	return s.repo.SetEnabled(ctx, id, enabled, userID)
+}

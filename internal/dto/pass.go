@@ -43,3 +43,7 @@ type PassListResponse struct {
 	PageSize int       `json:"pageSize"`
 	Total    int       `json:"total"`
 }
+
+type UpdatePassEnabledRequest struct {
+	Enabled bool `json:"enabled"`
+}

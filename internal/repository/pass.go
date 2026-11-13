@@ -194,6 +194,30 @@ func (r *PassRepository) Get(ctx context.Context, id int64) (*dto.PassDTO, error
 	return item, nil
 }
 
+func (r *PassRepository) SetEnabled(
+	ctx context.Context,
+	id int64,
+	enabled bool,
+	userID int64,
+) (*dto.PassDTO, error) {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE reg_weight
+		SET pass_enabled = $2,
+		    modified_by_user_id = $3,
+		    modified_date = now()
+		WHERE id = $1 AND deleted = false`,
+		id, enabled, userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("set pass enabled: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, ErrNotFound
+	}
+
+	return r.Get(ctx, id)
+}
+
 func scanPass(row scanner) (*dto.PassDTO, error) {
 	var item dto.PassDTO
 	var cargoID, counterpartyID, carrierID int64

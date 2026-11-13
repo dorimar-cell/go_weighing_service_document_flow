@@ -82,6 +82,33 @@ func (h *PassHandler) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, pass)
 }
 
+// SetEnabled: PATCH /spa/api/weighing/passes/{id}/enabled
+func (h *PassHandler) SetEnabled(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permPasses) {
+		return
+	}
+
+	id, err := parseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_id", "Некорректный идентификатор пропуска")
+		return
+	}
+
+	var request dto.UpdatePassEnabledRequest
+	if err := decodeJSON(w, r, &request); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+		return
+	}
+
+	pass, err := h.service.SetEnabled(r.Context(), id, request.Enabled, currentUserID(r))
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, pass)
+}
+
 func (h *PassHandler) handleError(w http.ResponseWriter, err error) {
 	var validation *service.ValidationError
 	if errors.As(err, &validation) {

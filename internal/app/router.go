@@ -56,6 +56,7 @@ func NewRouter(handlers Handlers, auth *middleware.Auth, corsOrigins []string) *
 		r.Post("/passes", handlers.Pass.Create)
 		r.Get("/passes", handlers.Pass.List)
 		r.Get("/passes/{id}", handlers.Pass.Get)
+		r.Patch("/passes/{id}/enabled", handlers.Pass.SetEnabled)
 	})
 
 	return router
