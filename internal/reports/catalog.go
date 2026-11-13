@@ -62,6 +62,15 @@ var catalog = []dto.ReportDefinition{
 		}),
 	},
 	{
+		Code:        "ttn-batch",
+		Title:       "ТТН за период",
+		Group:       GroupJournals,
+		Kind:        "grid",
+		Description: "Пакетная печать ТТН по закрытым рейсам: по документу на страницу, с сохранёнными реквизитами.",
+		Formats:     []string{"html"},
+		Params:      periodParams(),
+	},
+	{
 		Code:        "cargo-summary",
 		Title:       "Отчёт по грузам",
 		Group:       GroupAggregates,

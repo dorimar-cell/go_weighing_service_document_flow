@@ -65,6 +65,8 @@ func (s *ReportService) Run(ctx context.Context, code string, query url.Values) 
 		return s.runJournal(ctx, query, format)
 	case "talons":
 		return s.runTalons(ctx, query, format)
+	case "ttn-batch":
+		return s.runTTNBatch(ctx, query, format)
 	case "first-weight":
 		return s.runFirstWeight(ctx, query, format)
 	case "journal-by-transport":
@@ -249,6 +251,68 @@ func (s *ReportService) runTransportJournal(
 		Name:        "journal-by-transport-" + time.Now().Format("20060102-150405") + ".html",
 		ContentType: "text/html; charset=utf-8",
 		Data:        reports.RenderTransportJournal(items, filter),
+	}, nil
+}
+
+func (s *ReportService) runTTNBatch(
+	ctx context.Context,
+	query url.Values,
+	format string,
+) (*ReportFile, error) {
+	if format != "html" {
+		return nil, &ValidationError{Message: "Пакет ТТН формируется в HTML (печать из браузера)"}
+	}
+
+	dateFrom, err := parseReportDate(query.Get("dateFrom"), false)
+	if err != nil {
+		return nil, err
+	}
+	dateTo, err := parseReportDate(query.Get("dateTo"), true)
+	if err != nil {
+		return nil, err
+	}
+
+	sessions, err := s.sessions.Export(ctx, "closed", "", dateFrom, dateTo)
+	if err != nil {
+		return nil, err
+	}
+	if len(sessions) > 200 {
+		return nil, &ValidationError{
+			Message: "Слишком много рейсов для пакета ТТН (макс. 200). Сузьте период.",
+		}
+	}
+
+	settings, err := s.Settings(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]reports.TTNBatchItem, 0, len(sessions))
+	for index := range sessions {
+		details, err := s.docs.SessionDetails(ctx, sessions[index].ID)
+		if err != nil {
+			return nil, err
+		}
+
+		doc := s.ttnDefaults(details, settings)
+		if saved, err := s.docs.TTN(ctx, sessions[index].ID); err != nil {
+			return nil, err
+		} else if saved != nil {
+			doc = *saved
+		}
+
+		items = append(items, reports.TTNBatchItem{Details: details, Document: doc})
+	}
+
+	filter := reports.JournalFilter{
+		DateFrom: strings.TrimSpace(query.Get("dateFrom")),
+		DateTo:   strings.TrimSpace(query.Get("dateTo")),
+	}
+
+	return &ReportFile{
+		Name:        "ttn-batch-" + time.Now().Format("20060102-150405") + ".html",
+		ContentType: "text/html; charset=utf-8",
+		Data:        reports.RenderTTNBatch(items, filter, settings),
 	}, nil
 }
 

@@ -59,6 +59,15 @@ func RenderTransportJournal(items []dto.SessionDTO, filter JournalFilter) []byte
 	return renderTransportJournal(items, filter)
 }
 
+// RenderTTNBatch собирает пакет ТТН за период.
+func RenderTTNBatch(
+	items []TTNBatchItem,
+	filter JournalFilter,
+	settings dto.ReportSettings,
+) []byte {
+	return renderTTNBatch(items, filter, settings)
+}
+
 // RenderCargoAct собирает акт приёма-передачи товара.
 func RenderCargoAct(details *dto.SessionDetails, settings dto.ReportSettings) []byte {
 	return renderCargoAct(details, settings)

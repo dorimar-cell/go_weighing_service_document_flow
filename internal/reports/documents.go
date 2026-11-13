@@ -46,6 +46,15 @@ func cargoPrice(details *dto.SessionDetails, fallback float64) float64 {
 }
 
 func renderTTN(details *dto.SessionDetails, doc dto.TTNDocument, settings dto.ReportSettings) []byte {
+	number := doc.TTNNumber
+	if number == "" {
+		number = "б/н"
+	}
+	return wrapHTML("ТТН №"+number, false, ttnBody(details, doc, settings))
+}
+
+// ttnBody собирает тело ТТН без обёртки HTML: нужно для пакетной печати.
+func ttnBody(details *dto.SessionDetails, doc dto.TTNDocument, settings dto.ReportSettings) string {
 	session := &details.Session
 
 	quantity := cargoQuantity(session)
@@ -150,7 +159,7 @@ func renderTTN(details *dto.SessionDetails, doc dto.TTNDocument, settings dto.Re
 	body.WriteString("<p class=\"note\">Бланк ТТН сформирован веб-системой весовой на основании данных рейса " +
 		"и сохранённых реквизитов документа. Унифицированная форма 1-Т адаптирована для печати из браузера.</p>")
 
-	return wrapHTML("ТТН №"+number, false, body.String())
+	return body.String()
 }
 
 func renderTorg12(details *dto.SessionDetails, doc dto.Torg12Document, settings dto.ReportSettings) []byte {
