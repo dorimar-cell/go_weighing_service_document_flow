@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"go_weighing_service/internal/registry"
 	"go_weighing_service/internal/repository"
 	"go_weighing_service/internal/service"
 )
@@ -143,9 +144,9 @@ func (h *DictionaryHandler) Export(w http.ResponseWriter, r *http.Request) {
 	writer.Comma = ';'
 
 	headers := make([]string, 0, len(export.Fields)+1)
-	headers = append(headers, "id")
+	headers = append(headers, "ID")
 	for _, field := range export.Fields {
-		headers = append(headers, field.Key)
+		headers = append(headers, registry.FieldLabel(field.Key))
 	}
 	_ = writer.Write(headers)
 

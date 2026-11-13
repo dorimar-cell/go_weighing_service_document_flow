@@ -97,6 +97,15 @@ func RenderTransportJournalXLSX(items []dto.SessionDTO, filter JournalFilter) ([
 	return renderTransportJournalXLSX(items, filter)
 }
 
+// RenderInvoiceBatch собирает пакет счетов-фактур за период.
+func RenderInvoiceBatch(
+	items []InvoiceBatchItem,
+	filter JournalFilter,
+	settings dto.ReportSettings,
+) []byte {
+	return renderInvoiceBatch(items, filter, settings)
+}
+
 // RenderTorg12Batch собирает пакет ТОРГ-12 за период.
 func RenderTorg12Batch(
 	items []Torg12BatchItem,

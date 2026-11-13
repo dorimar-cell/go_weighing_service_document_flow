@@ -157,6 +157,52 @@ func (r *SessionRepository) AuditJournal(
 	}, rows.Err()
 }
 
+// Restore возвращает отменённый рейс.
+func (r *SessionRepository) Restore(ctx context.Context, id int64, userID int64) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin restore session: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var infoID int64
+	var deleted bool
+	if err := tx.QueryRow(ctx,
+		`SELECT id_weighting_info, deleted FROM weighing WHERE id = $1 FOR UPDATE`, id,
+	).Scan(&infoID, &deleted); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		return fmt.Errorf("lock session for restore: %w", err)
+	}
+
+	if !deleted {
+		return fmt.Errorf("%w: рейс не отменён", ErrConflict)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE weighing
+		SET deleted = false, modified_by_user_id = $2, modified_date = now()
+		WHERE id = $1`, id, userID,
+	); err != nil {
+		return fmt.Errorf("restore weighing: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE weighing_info
+		SET deleted = false, modified_by_user_id = $2, modified_date = now()
+		WHERE id = $1`, infoID, userID,
+	); err != nil {
+		return fmt.Errorf("restore weighing_info: %w", err)
+	}
+
+	if err := insertSessionAudit(ctx, tx, id, "restored", userID, nil); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
 // Update правит рейс: транспорт, реквизиты, веса и время взвешиваний.
 func (r *SessionRepository) Update(
 	ctx context.Context,

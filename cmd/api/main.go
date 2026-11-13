@@ -67,6 +67,10 @@ func main() {
 	settingsService := service.NewSettingsService(settingsRepo)
 	settingsHandler := handler.NewSettingsHandler(settingsService)
 
+	rbacRepo := repository.NewRBACRepository(pool)
+	rbacService := service.NewRBACService(rbacRepo)
+	rbacHandler := handler.NewRBACHandler(rbacService)
+
 	photoRepo := repository.NewPhotoRepository(pool)
 	photoService := service.NewPhotoService(photoRepo, cfg.PhotoDir)
 	photoHandler := handler.NewPhotoHandler(photoService)
@@ -83,6 +87,7 @@ func main() {
 			Photo:      photoHandler,
 			Report:     reportHandler,
 			Settings:   settingsHandler,
+			RBAC:       rbacHandler,
 		},
 		auth,
 		cfg.CORSOrigins,

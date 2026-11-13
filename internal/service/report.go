@@ -69,6 +69,8 @@ func (s *ReportService) Run(ctx context.Context, code string, query url.Values) 
 		return s.runTTNBatch(ctx, query, format)
 	case "torg12-batch":
 		return s.runTorg12Batch(ctx, query, format)
+	case "invoice-batch":
+		return s.runInvoiceBatch(ctx, query, format)
 	case "first-weight":
 		return s.runFirstWeight(ctx, query, format)
 	case "journal-by-transport":
@@ -403,6 +405,68 @@ func (s *ReportService) runTorg12Batch(
 		Name:        "torg12-batch-" + time.Now().Format("20060102-150405") + ".html",
 		ContentType: "text/html; charset=utf-8",
 		Data:        reports.RenderTorg12Batch(items, filter, settings),
+	}, nil
+}
+
+func (s *ReportService) runInvoiceBatch(
+	ctx context.Context,
+	query url.Values,
+	format string,
+) (*ReportFile, error) {
+	if format != "html" {
+		return nil, &ValidationError{Message: "Пакет счетов формируется в HTML (печать из браузера)"}
+	}
+
+	dateFrom, err := parseReportDate(query.Get("dateFrom"), false)
+	if err != nil {
+		return nil, err
+	}
+	dateTo, err := parseReportDate(query.Get("dateTo"), true)
+	if err != nil {
+		return nil, err
+	}
+
+	sessions, err := s.sessions.Export(ctx, "closed", "", dateFrom, dateTo)
+	if err != nil {
+		return nil, err
+	}
+	if len(sessions) > 200 {
+		return nil, &ValidationError{
+			Message: "Слишком много рейсов для пакета счетов (макс. 200). Сузьте период.",
+		}
+	}
+
+	settings, err := s.Settings(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]reports.InvoiceBatchItem, 0, len(sessions))
+	for index := range sessions {
+		details, err := s.docs.SessionDetails(ctx, sessions[index].ID)
+		if err != nil {
+			return nil, err
+		}
+
+		doc := s.invoiceDefaults(details, settings)
+		if saved, err := s.docs.Invoice(ctx, sessions[index].ID); err != nil {
+			return nil, err
+		} else if saved != nil {
+			doc = *saved
+		}
+
+		items = append(items, reports.InvoiceBatchItem{Details: details, Document: doc})
+	}
+
+	filter := reports.JournalFilter{
+		DateFrom: strings.TrimSpace(query.Get("dateFrom")),
+		DateTo:   strings.TrimSpace(query.Get("dateTo")),
+	}
+
+	return &ReportFile{
+		Name:        "invoice-batch-" + time.Now().Format("20060102-150405") + ".html",
+		ContentType: "text/html; charset=utf-8",
+		Data:        reports.RenderInvoiceBatch(items, filter, settings),
 	}, nil
 }
 

@@ -185,6 +185,14 @@ func (s *SessionService) Cancel(ctx context.Context, id int64, userID int64) err
 	return s.repo.Cancel(ctx, id, userID)
 }
 
+// Restore возвращает отменённый рейс.
+func (s *SessionService) Restore(ctx context.Context, id int64, userID int64) error {
+	if id <= 0 {
+		return &ValidationError{Message: "Некорректный идентификатор рейса"}
+	}
+	return s.repo.Restore(ctx, id, userID)
+}
+
 // AuditJournal возвращает журнал аудита по всем рейсам.
 func (s *SessionService) AuditJournal(
 	ctx context.Context,
@@ -197,7 +205,7 @@ func (s *SessionService) AuditJournal(
 ) (*dto.AuditJournalResponse, error) {
 	action = strings.TrimSpace(action)
 	switch action {
-	case "", "created", "closed", "flow_closed", "cancelled", "edited", "document_saved":
+	case "", "created", "closed", "flow_closed", "cancelled", "restored", "edited", "document_saved":
 	default:
 		return nil, &ValidationError{Message: fmt.Sprintf("Неизвестное действие: %s", action)}
 	}

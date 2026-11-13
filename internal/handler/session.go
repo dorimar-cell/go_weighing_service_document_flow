@@ -395,6 +395,26 @@ func formatCSVTime(value *time.Time) string {
 	return value.Format("02.01.2006 15:04")
 }
 
+// Restore: POST /spa/api/weighing/sessions/{id}/restore
+func (h *SessionHandler) Restore(w http.ResponseWriter, r *http.Request) {
+	if !requirePermission(w, r, permEdit) {
+		return
+	}
+
+	id, err := parseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_id", "Некорректный идентификатор рейса")
+		return
+	}
+
+	if err := h.service.Restore(r.Context(), id, currentUserID(r)); err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // Update: PATCH /spa/api/weighing/sessions/{id}
 func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if !requirePermission(w, r, permEdit) {

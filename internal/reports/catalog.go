@@ -80,6 +80,15 @@ var catalog = []dto.ReportDefinition{
 		Params:      periodParams(),
 	},
 	{
+		Code:        "invoice-batch",
+		Title:       "Счета-фактуры за период",
+		Group:       GroupJournals,
+		Kind:        "grid",
+		Description: "Пакетная печать счетов-фактур по закрытым рейсам: документ на страницу.",
+		Formats:     []string{"html"},
+		Params:      periodParams(),
+	},
+	{
 		Code:        "cargo-summary",
 		Title:       "Отчёт по грузам",
 		Group:       GroupAggregates,

@@ -3,3 +3,4 @@ weighing
 weighing.exe
 *.log
 data/
+backups/
