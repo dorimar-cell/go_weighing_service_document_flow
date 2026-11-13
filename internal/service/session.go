@@ -71,6 +71,9 @@ func (s *SessionService) Create(
 	if request.TransportNumber == "" {
 		return nil, &ValidationError{Message: "Укажите номер транспортного средства"}
 	}
+	if err := s.checkBlacklist(ctx, request.TransportNumber, request.TrailerNumber, request.DriverName); err != nil {
+		return nil, err
+	}
 	if err := s.validateRequiredFields(
 		ctx,
 		request.TransportNumber,
@@ -190,6 +193,9 @@ func (s *SessionService) Update(
 	if request.TransportNumber == "" {
 		return nil, &ValidationError{Message: "Укажите номер транспортного средства"}
 	}
+	if err := s.checkBlacklist(ctx, request.TransportNumber, request.TrailerNumber, request.DriverName); err != nil {
+		return nil, err
+	}
 	if request.FirstWeightKg < 0 {
 		return nil, &ValidationError{Message: "Вес первого взвешивания не может быть отрицательным"}
 	}
@@ -243,6 +249,23 @@ func (s *SessionService) Audit(ctx context.Context, id int64) ([]dto.SessionAudi
 		return nil, &ValidationError{Message: "Некорректный идентификатор рейса"}
 	}
 	return s.repo.Audit(ctx, id)
+}
+
+// checkBlacklist отклоняет рейс, если ТС/прицеп/водитель в чёрном списке.
+func (s *SessionService) checkBlacklist(
+	ctx context.Context,
+	transport string,
+	trailer string,
+	driver string,
+) error {
+	kind, name, found, err := s.repo.BlacklistMatch(ctx, transport, trailer, driver)
+	if err != nil {
+		return err
+	}
+	if found {
+		return &ValidationError{Message: fmt.Sprintf("%s «%s» в чёрном списке", kind, name)}
+	}
+	return nil
 }
 
 // validateRequiredFields проверяет обязательность полей по настройкам весовой.
